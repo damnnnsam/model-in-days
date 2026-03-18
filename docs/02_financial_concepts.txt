@@ -1,0 +1,602 @@
+FINANCIAL CONCEPTS — EVERYTHING IN THE MODEL
+=============================================
+
+This document explains every concept, variable, and formula used in the financial
+model. It's based on the SPIO (Sales Process IO) framework by Nick Kozmin, combined
+with standard corporate finance valuation theory.
+
+
+================================================================================
+SECTION 1: THE BIG PICTURE
+================================================================================
+
+The core thesis: for internet businesses, the fundamental value drivers are
+marketing metrics. Everything upstream in the P&L is just arithmetic on top of
+those numbers. The model maps:
+
+  Marketing inputs (CPM, CTR, conversion rates, SDR activity)
+       ↓
+  Leads per day (per channel)
+       ↓
+  New customers per day (after time delays)
+       ↓
+  Revenue (booked and cash collected, with timing)
+       ↓
+  Costs (sales, fulfillment, marketing, fixed, transaction fees, refunds)
+       ↓
+  P&L (Gross Profit → EBITDA → Net Income)
+       ↓
+  Free Cash Flow
+       ↓
+  DCF Valuation → Enterprise Value → Equity Value → Share Price
+
+No leaps of faith. Every number traces back to an observable, measurable input.
+
+
+================================================================================
+SECTION 2: STARTING STATE
+================================================================================
+
+cash_in_bank (cash_0)
+  Cash you have at time t=0. The simulation starts here.
+
+assets
+  Other assets on the balance sheet (not used in core calculations, included
+  for completeness).
+
+liabilities
+  Existing liabilities.
+
+customer_count (c_0)
+  How many paying customers you already have at t=0. If starting from scratch,
+  this is 0. If modeling an existing business at a point in time, enter your
+  current active customer count.
+
+  Nick Kozmin tip: "You can model different states. If you're starting from 50
+  customers, you can model from zero to 50 separately with different fixed costs,
+  then create a separate model for 50+ and compare."
+
+total_addressable_market (TAM)
+  The total number of potential customers in your market. Currently used as a
+  hard ceiling on active customers. (See known limitations section.)
+
+upfront_investment_costs
+  One-time costs to get started. Building the product, setting up infrastructure,
+  etc. Example: $50K to build a SaaS product before you can charge $6,000/year.
+  Deducted from cash balance at day 0.
+
+debt
+  Outstanding debt. Used to calculate interest expense and the equity bridge
+  (Enterprise Value - Debt + Cash = Equity Value).
+
+interest_rate (r_debt)
+  Annual interest rate on the debt. Interest is charged daily as:
+  daily_interest = debt × (r_debt / 100) / 365
+
+
+================================================================================
+SECTION 3: SALES
+================================================================================
+
+cost_to_sell (c_s)
+  The total commission paid to close a sale, expressed as % of Price (P).
+  Includes sales rep commission + sales manager override.
+  
+  Example: If the sales commission is 15% and the sales manager gets 3%, c_s = 18%.
+  
+  This is applied at the moment of sale, not spread over time.
+
+time_to_sell (t_s)
+  The sales cycle length in days. Time between a lead becoming qualified and
+  the first purchase event.
+  
+  Nick Kozmin: "The sales cycle length is really dependent on cash flow. Getting
+  to profitability from scratch depends on that sales cycle length."
+  
+  Example: A 14-day sales cycle is typical for mid-market B2B.
+
+avg_deals_per_rep_per_month
+  How many deals each sales rep closes per month. Used for capacity planning
+  (not directly in the simulation math, but useful as a reference metric).
+
+
+================================================================================
+SECTION 4: MARKETING CHANNELS
+================================================================================
+
+The model supports four customer acquisition channels. Each can be toggled on/off.
+The total delay from first impression to paying customer is:
+  total_delay = time_to_market + time_to_sell
+
+This delay is critical because it determines how long it takes for marketing
+spend to convert into cash.
+
+--- INBOUND (Paid Advertising) ---
+
+The inbound funnel:
+  Media Spend → Impressions → Clicks → Leads → Customers
+
+media_spend
+  Monthly budget for paid advertising (Facebook, Google, LinkedIn, etc.).
+
+cpm (Cost Per Mille / Cost Per Thousand Impressions)
+  How much it costs to show your ad 1,000 times. Found in your ad platform's
+  analytics. Varies wildly by:
+  - Geography (US is expensive, SE Asia is cheap)
+  - Industry competitiveness
+  - Audience specificity
+  - Time of year
+  
+  Typical ranges: $5-15 (broad consumer), $30-80 (B2B professional), $80-150+ (finance/legal)
+
+ctr (Click-Through Rate)
+  Percentage of impressions that result in a click. Found in ad analytics.
+  Typical: 0.5% - 2% for display/social ads.
+
+  Derived metric: Cost Per Click (CPC) = CPM / (CTR × 10)
+  Example: CPM $55, CTR 1% → CPC = $55 / (0.01 × 10) = $5.50
+
+funnel_conversion_rate
+  Percentage of clicks that become a lead. A "lead" = someone who completes your
+  funnel action (quiz, form, booking page, etc.).
+  
+  Nick Kozmin: "If your funnel is done well, that lead rate will be around 2%."
+  
+  This is the first major leverage point. A well-designed funnel doubles this easily.
+
+time_to_market_inbound
+  Days between first ad impression and the lead event. For online advertising,
+  this is typically 1-2 days (leads can come in almost instantly).
+
+lead_conversion_rate_inbound
+  Percentage of inbound leads that become paying customers.
+  
+  IMPORTANT: This is NOT the close rate of the demo/pitch. This is the end-to-end
+  rate from lead → qualified → pitched → closed.
+  
+  Nick Kozmin: "Even if your close rate is 25%, not all leads turn into qualified
+  pitches. Maybe only 1/3 turn into qualified appointments. 25% / 3 ≈ 8%."
+  
+  Formula: lead_conversion_rate = close_rate × qualification_rate
+  Example: 25% close rate × 33% qualification rate = 8.3%
+
+Inbound math (daily):
+  impressions_per_day = (media_spend / cpm) × 1000 / 30
+  clicks_per_day = impressions_per_day × (ctr / 100)
+  leads_per_day = clicks_per_day × (funnel_conversion_rate / 100)
+  new_customers_per_day = leads_per_day × (lead_conversion_rate / 100)
+    (delayed by time_to_market_inbound + time_to_sell days)
+
+Example with defaults:
+  impressions/day = ($50,000 / $55) × 1000 / 30 = 30,303
+  clicks/day = 30,303 × 0.01 = 303
+  leads/day = 303 × 0.02 = 6.06
+  customers/day = 6.06 × 0.08 = 0.48 (≈ 14.5/month)
+
+
+--- OUTBOUND (Cold Prospecting) ---
+
+The outbound funnel:
+  SDRs → Contacts → Leads → Customers
+
+outbound_salary
+  Monthly salary/commission per SDR (Sales Development Rep). Usually $2,000-$3,000.
+  This is a fixed marketing cost.
+
+contacts_per_month
+  Number of outreach touches per SDR per month. Includes emails, LinkedIn messages,
+  cold calls. Typically around 2,000 for email-heavy outbound.
+
+number_of_sdrs
+  How many SDRs you have prospecting.
+
+outbound_conversion_rate
+  Percentage of contacts that become leads (i.e., book a discovery call).
+  
+  Nick Kozmin: "That number overall across everybody should be about 2%."
+  
+  A 2% contact-to-lead rate on 2,000 contacts = 40 leads/month per SDR.
+
+time_to_market_outbound
+  Days between the first message and when the prospect becomes a lead (books a call).
+  This matters because if it takes 40 days to generate a lead, your ramp-up is slow.
+
+lead_conversion_rate_outbound
+  Same concept as inbound — the end-to-end rate from outbound lead → customer.
+
+Outbound math (daily):
+  contacts_per_day = (number_of_sdrs × contacts_per_month) / 30
+  leads_per_day = contacts_per_day × (outbound_conversion_rate / 100)
+  new_customers_per_day = leads_per_day × (lead_conversion_rate / 100)
+    (delayed by time_to_market_outbound + time_to_sell days)
+
+
+--- ORGANIC ---
+
+organic_views_per_month
+  Monthly impressions from unpaid sources (SEO, content, social, YouTube, etc.).
+
+organic_view_to_lead_rate
+  Percentage of organic views that become leads.
+
+lead_to_customer_rate_organic
+  Percentage of organic leads that become customers.
+
+time_to_market_organic
+  Days from first organic impression to lead event. Usually longer than paid (30+ days)
+  because organic discovery is less targeted.
+
+organic_cost_per_month
+  The cost of producing organic content (writers, video production, SEO tools, etc.).
+
+
+--- VIRAL ---
+
+The viral loop:
+  Active Customer → Invites → New Customers → (they invite too → exponential)
+
+invites_per_customer
+  Average number of referral requests or invites a customer sends during their
+  active lifetime. Can be formal (referral program) or organic (word of mouth).
+
+conversion_rate_per_invite
+  Percentage of invites that convert to paying customers.
+
+K value (viral coefficient)
+  K = invites_per_customer × (conversion_rate_per_invite / 100)
+  
+  K < 1: Viral adds customers but growth is sublinear (each generation is smaller)
+  K = 1: Each customer replaces themselves (steady state)
+  K > 1: EXPONENTIAL GROWTH. Each customer brings in more than one new customer.
+  
+  Nick Kozmin: "If the K value is over one, the thing's gonna really jump up."
+  
+  Example: 20 invites × 10% conversion = K = 2.0 → explosive growth
+
+viral_time
+  Average days from invitation to close. If this is small (fast conversion),
+  viral effects compound quickly. If large, the viral loop is slow/weak.
+
+viral_start
+  Day on which the viral mechanism begins. Maybe you launch the referral program
+  on day 30 or day 100.
+
+cost_to_sell_viral (c_s_viral)
+  Commission to close a referred customer, as % of P. You still may need a
+  salesperson to convert the referral.
+
+cost_to_market_viral (c_m_viral)
+  Referral bonus / incentive paid to the referring customer, as % of P.
+  Example: If you pay $500 for a referral on a $5,000 deal, c_m_viral = 10%.
+  If referrals are purely organic (word of mouth), this is 0%.
+
+
+================================================================================
+SECTION 5: PRODUCT & PRICING
+================================================================================
+
+price_of_offer (P)
+  The average total price the customer pays over the contract period.
+  
+  Examples:
+  - $100/month × 12-month contract → P = $1,200
+  - $100/month × 3-month contract → P = $300
+  - $100/month, no set contract → P = $100
+  - $6,000/year upfront → P = $6,000
+  
+  Nick Kozmin: "A business is just a bunch of offers stacked together. This is
+  offer-specific modeling. If you have multiple offers, you can stack these models."
+
+realization_rate (RR)
+  The percentage of billed revenue that actually gets collected as cash.
+  Accounts for payment defaults, failed charges, disputed payments.
+  
+  Formula: RR = Cash Collected / Cash Requested
+  
+  Typical: 93% - 99%. Lower for payment plans, higher for upfront payment.
+
+cost_to_fulfill (c_f)
+  Cost to deliver the product/service, expressed as % of P.
+  
+  Nick Kozmin: "I like baking in the support into the cost to fulfill. Not just
+  the gross contribution — bake in support people too."
+  
+  Typical ranges:
+  - SaaS: 5-10% (mostly servers and support)
+  - Online service business: 10-15%
+  - Service/agency business: 25-35%
+  - Physical product: 40-60%
+
+time_to_collect (t_c)
+  Days between the first purchase event and when you've collected all the money.
+  
+  THIS IS DIFFERENT FROM CONTRACT LENGTH.
+  
+  Examples:
+  - Paid in full upfront → t_c = 1 day
+  - 3 monthly payments → t_c = 60 days
+  - 12 monthly payments → t_c = 365 days
+  
+  Nick Kozmin: "If you're selling upfront deals or getting the contract in two
+  or three monthly payments, if it's in two payments: t_c = 30 days.
+  If three payments: t_c = 60 days."
+  
+  The cash is distributed evenly over the t_c period in the simulation.
+
+refund_period
+  If a customer requests a refund, this is how many days after purchase it happens.
+  Example: 60-day money-back guarantee → refund_period = 60.
+
+refund_rate
+  Percentage of customers who request and receive a refund.
+  Example: 2% refund rate means 2 out of 100 customers get refunded.
+  Refunded customers are removed from the active count and the revenue is reversed.
+
+contract_length (time_to_renew)
+  Days between first purchase and when the renewal decision happens.
+  - Annual contract → 365 days
+  - Monthly subscription → 30 days
+  - One-time purchase (no renewal) → set churn_rate to 100%
+
+
+================================================================================
+SECTION 6: RENEWALS & CHURN
+================================================================================
+
+churn_rate
+  Percentage of customers who do NOT renew when their contract expires.
+  
+  - 100% churn = one-time purchase (no renewals)
+  - 50% churn = half the customers renew
+  - 0% churn = everyone renews (ideal but unrealistic)
+  
+  Nick Kozmin: "If you're selling a one-time offer, this churn rate will be 100%
+  and all of the other renewal stuff goes away."
+
+price_of_renewal (p_renewal)
+  What you charge for the renewal. Can be:
+  - Same as original (P = p_renewal)
+  - Higher (upsell/expansion)
+  - Lower (loyalty discount)
+
+cost_to_sell_renewal (c_s_renewal)
+  Commission or cost to sell the renewal, as % of renewal price.
+  If automatic (no salesperson needed), this can be 0%.
+  If a customer success person is involved, maybe 5-10%.
+
+cost_to_fulfill_renewal (c_f_renewal)
+  Cost to deliver the renewed product/service, as % of renewal price.
+  Usually similar to the original c_f.
+
+time_to_collect_renewal (t_c_renewal)
+  Days to collect renewal payment. May differ from original (renewals might
+  be monthly while original was upfront).
+
+renewal_rate_of_renewals
+  Of the customers who renewed once, what % renew again?
+  
+  This creates a perpetual renewal chain:
+  - First purchase: 100% of customers
+  - First renewal: (1 - churn_rate) × (1 - refund_rate)
+  - Second renewal: first_renewal × renewal_rate_of_renewals
+  - Third renewal: second_renewal × renewal_rate_of_renewals
+  - ... (geometric series)
+  
+  Example: churn 50%, refund 2%, renewal_of_renewal 50%
+  - 100 customers buy
+  - 49 renew (50% × 98%)
+  - 24.5 renew again (49 × 50%)
+  - 12.25 renew again, etc.
+
+
+================================================================================
+SECTION 7: ADMINISTRATION
+================================================================================
+
+transaction_fee (TF)
+  Payment processor fee, applied to all cash collected.
+  Stripe: 2.9% + $0.30 per transaction (we simplify to %).
+
+fixed_costs_per_month (FC)
+  Monthly overhead that doesn't change with sales volume:
+  - Rent
+  - Founder/engineer salaries
+  - Tools and subscriptions
+  - Insurance
+  
+  Nick Kozmin: "I don't like putting support people here. I like putting them in
+  cost to fulfill. This is just rent, fixed salaries, engineers."
+
+fixed_cost_increase_per_100_customers
+  Semi-variable cost that scales with customer base. Per month, per 100 customers.
+  Example: $500/month per 100 customers = you might need another support desk,
+  another server, etc.
+  
+  Total fixed cost on day d = FC + (active_customers / 100) × this value
+
+
+================================================================================
+SECTION 8: VALUATION
+================================================================================
+
+--- General ---
+
+tax_rate (r_tax)
+  Corporate tax rate. Applied only to positive EBIT (no tax on losses).
+  Lower tax rate → higher FCF → higher valuation.
+
+inflation_rate
+  Used for reference. The discount rate should already account for inflation.
+
+time_max
+  Total simulation period in days. This is the domain of the graphs.
+  Default 2500 days ≈ 6.8 years.
+
+number_of_shares
+  Shares outstanding, as defined in shareholder agreement.
+  Used to compute per-share price: share_price = equity_value / shares.
+
+--- DCF Method (Discounted Cash Flow) ---
+
+This is the primary valuation method. It calculates what the business is worth
+based on the present value of all future cash flows it will generate.
+
+Think of it as: "If I could see all the cash this business will ever produce,
+and discount it back to today's dollars, what would I pay for it?"
+
+projection_period_dcf
+  The period over which we explicitly model cash flows (e.g., 5 years = 1825 days).
+  After this, we assume steady-state growth via the terminal value.
+
+discount_rate (r_discount)
+  The rate of return an investor requires. Reflects the risk and opportunity cost.
+  
+  Higher discount rate → lower present value → lower valuation.
+  
+  Typical: 8-15% for private companies, 5-8% for established businesses.
+  Often approximated as WACC (Weighted Average Cost of Capital).
+
+perpetual_growth_rate (r_perpetual_growth)
+  The expected long-term growth rate of the business after the projection period.
+  Typically between inflation (2-3%) and GDP growth (4-5%).
+  
+  Must be LESS than the discount rate, or the terminal value goes to infinity.
+
+The DCF calculation:
+
+  1. Sum discounted daily FCF:
+     PV(FCF) = Σ [FCF(d) / (1 + r_daily)^d]  for d = 0 to projection_period
+     where r_daily = (1 + r_discount)^(1/365)
+
+  2. Terminal Value (Gordon Growth Model):
+     TV = FCF_annual_terminal × (1 + g) / (r - g)
+     where:
+       FCF_annual_terminal = average daily FCF in last year × 365
+       g = perpetual_growth_rate
+       r = discount_rate
+
+  3. Present value of terminal value:
+     PV(TV) = TV / (1 + r)^(projection_period / 365)
+
+  4. Enterprise Value = PV(FCF) + PV(TV)
+
+  5. Equity Value = Enterprise Value - Debt + Cash
+
+  6. Share Price = Equity Value / Number of Shares
+
+Nick Kozmin whiteboard explanation:
+  "You're calculating the area under the FCF curve from T1 to T2, taking the
+  present value. Then at the five-year mark you chop it and assign a perpetual
+  growth rate. The terminal value is the cash flow at T2, with perpetual growth,
+  present-valued back. Add that to the area. Then add on cash and subtract debt."
+
+--- EBITDA Multiple Method ---
+
+A simpler, "back of the envelope" valuation that uses market comparables.
+
+enterprise_multiple_ebitda
+  What multiple of EBITDA comparable companies trade at.
+  Varies by industry. Can be found in NYU Stern's Damodaran database.
+  
+  Typical: 8-15x for software, 5-8x for services, 3-6x for manufacturing.
+
+projection_period_ebitda
+  The point in time at which you calculate the trailing 12-month EBITDA.
+  Usually the same as the DCF projection period.
+
+Calculation:
+  Trailing 12M EBITDA = sum of daily EBITDA for last 365 days before projection point
+  Enterprise Value = EBITDA × Multiple
+  Equity Value = EV - Debt + Cash
+  Share Price = Equity Value / Shares
+
+--- Comparing the Two Methods ---
+
+The DCF method is bottoms-up (based on YOUR cash flows with YOUR assumptions).
+The EBITDA method is market-based (what would the market pay for this profile).
+
+If DCF >> EBITDA multiple: The market is undervaluing businesses like yours,
+  OR your growth assumptions are too aggressive.
+If DCF << EBITDA multiple: Your cash flows don't support the market multiple,
+  OR the market is overheated.
+
+
+================================================================================
+SECTION 9: KEY OUTPUT METRICS
+================================================================================
+
+time_to_profitability
+  The day (and month) when cumulative free cash flow crosses zero.
+  Before this point, the business is consuming cash. After, it's generating.
+  
+  Nick Kozmin: "The time to profitability is the intercept where the free cash
+  flow crosses zero. Really important, especially as a bootstrap entrepreneur."
+
+cash_consumption / cash_needed
+  The maximum cash deficit during the simulation. This is how much additional
+  funding you need to survive until profitability.
+  
+  Nick Kozmin: "The cash consumption is how much cash you need in addition to
+  not run out of money. If we had $200K in the bank, that would be zero."
+
+profit_per_customer_per_month
+  (Trailing 30-day revenue - trailing 30-day costs) / active customers.
+  
+  Nick Kozmin: "I like comparing the profit per customer per month because the
+  higher it is, the easier it is to get profitable and the shorter time to do so.
+  You can compare offers — a high ticket offer with a long sales cycle vs a lower
+  ticket offer with a short sales cycle."
+
+K value
+  Viral coefficient: invites_per_customer × (conversion_rate / 100).
+  K > 1 = exponential growth. K < 1 = viral adds customers but decays.
+
+CAC (Customer Acquisition Cost)
+  Total acquisition spend / total customers acquired.
+  Blended across all channels, or calculated per channel.
+
+LTV (Lifetime Value)
+  Total expected revenue from a customer minus variable costs.
+  Includes first purchase + expected renewals (geometric series).
+  
+  LTV = (P × RR × (1 - refund_rate) - P × c_f) + expected_renewal_value
+
+LTV / CAC Ratio
+  The fundamental unit economics test.
+  - < 1: You lose money on every customer (broken)
+  - 1-3: Marginal (might work with optimization)
+  - 3+: Healthy (the "magic number" for SaaS)
+  - 5+: Very strong, potentially under-investing in growth
+
+Payback Period
+  Days for a customer's revenue to cover the CAC.
+  payback = CAC / (P × RR / time_to_collect)
+
+
+================================================================================
+SECTION 10: KNOWN LIMITATIONS & FUTURE IMPROVEMENTS
+================================================================================
+
+1. TAM is currently just a hard ceiling on active customers. It doesn't model:
+   - Pool depletion for outbound (finite prospect list)
+   - Recontact cycles with declining conversion rates
+   - Audience saturation for inbound (CPM/CTR degradation)
+   - Per-channel TAM
+
+2. All marketing rates are constant. In reality:
+   - Outbound response rates decline as you exhaust the list
+   - Ad fatigue increases CPM and decreases CTR over time
+   - Organic grows as you build content/authority
+
+3. No seasonality or month-over-month variation.
+
+4. No working capital modeling beyond cash collection timing.
+
+5. No depreciation or amortization (EBITDA = EBIT in this model).
+
+6. Single offer model. Multiple offers require running separate models
+   and combining (as Nick suggests: "stack these models").
+
+7. The simulation uses fractional customers (e.g., 0.48 customers/day).
+   This is mathematically correct for expected values but doesn't model
+   the discrete/stochastic nature of real customer acquisition.

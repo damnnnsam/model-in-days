@@ -1,0 +1,266 @@
+HOW TO USE THE FINANCIAL MODELING TOOL
+======================================
+
+Based on Nick Kozmin's 34-minute demo walkthrough of the SPIO model,
+plus the capabilities added in this implementation.
+
+
+================================================================================
+GETTING STARTED
+================================================================================
+
+1. Start the app:
+   cd financial_modeling
+   python3 -m streamlit run app.py --server.headless true
+
+2. Open http://localhost:8501 in your browser
+
+3. The sidebar on the left has all inputs, organized into collapsible sections.
+   The main area shows KPIs, charts, and valuations that update in real time
+   as you change inputs.
+
+
+================================================================================
+STEP-BY-STEP: MODELING YOUR BUSINESS
+================================================================================
+
+Step 1: Starting State
+  - If starting from scratch: cash_in_bank = your starting capital, customer_count = 0
+  - If modeling an existing business: set customer_count to your current active customers,
+    set cash_in_bank to current cash, set upfront_costs to 0
+
+Step 2: Product / Pricing
+  - Set the Price of Offer (P) to your contract value
+  - Set Contract Length (how many days until renewal decision)
+  - Set Time to Collect based on payment terms:
+      Paid in full → 1 day
+      3 monthly payments → 60 days
+      Monthly over a year → 365 days
+  - Set Cost to Fulfill (include support staff costs here, not in fixed costs)
+  - Set Realization Rate (typically 93-99%)
+  - Set Refund Rate and Refund Period
+
+Step 3: Sales
+  - Set Cost to Sell (sales commission as % of P)
+  - Set Time to Sell (your sales cycle in days)
+
+Step 4: Marketing Channels
+  Enable whichever channels you use:
+  
+  Inbound:
+    - Monthly media spend
+    - CPM (from your ad platform analytics)
+    - CTR (from your ad platform analytics)
+    - Funnel conversion rate (clicks → leads, ~2% if well-built)
+    - Lead → customer rate (remember: not close rate, but close rate × qualification rate)
+  
+  Outbound:
+    - Number of SDRs
+    - Contacts per month per SDR
+    - SDR salary
+    - Contact → lead rate (~2% is the benchmark)
+    - Time to market outbound (days from first message to booked call)
+    - Lead → customer rate
+
+Step 5: Renewals
+  - Churn rate (100% = one-time purchase, 50% = half renew)
+  - If churn < 100%, set renewal pricing and costs
+  - Set renewal-of-renewals rate (do customers who renewed once stay longer?)
+
+Step 6: Administration
+  - Fixed costs per month (rent, engineering, tools — NOT support people)
+  - Transaction fees (2.9% for Stripe)
+  - Fixed cost increase per 100 customers (scaling costs)
+  - Upfront investment costs (building the product, setting up infrastructure)
+  - Debt and interest rate if applicable
+
+Step 7: Valuation
+  - Tax rate for your jurisdiction
+  - Discount rate (8-15% typical for private companies)
+  - Perpetual growth rate (2-3%, must be less than discount rate)
+  - Projection period (typically 5 years = 1825 days)
+  - EBITDA multiple (look up your industry, 8-15x for software)
+  - Number of shares
+
+
+================================================================================
+READING THE OUTPUTS
+================================================================================
+
+Top KPI Row:
+  - Active Customers: current customer count at end of simulation
+  - Monthly Revenue: trailing 30-day booked revenue
+  - Monthly FCF: trailing 30-day free cash flow
+  - Time to Profitability: months until cumulative FCF goes positive
+
+Second Row:
+  - CAC (Blended): all-channel average customer acquisition cost
+  - LTV: expected lifetime value per customer
+  - LTV/CAC: the magic ratio (want this > 3x)
+  - Payback Period: days until a customer pays back their acquisition cost
+
+Third Row:
+  - Profit/Customer/Month: key metric for comparing offers
+  - Cash Needed: how much funding you need to survive until profitable
+  - Gross Margin, EBITDA Margin
+
+Tabs:
+  Valuation — DCF and EBITDA methods side by side, equity value waterfall
+  Customers — Active/cumulative customer curves, new customers by channel
+  Revenue & Cash — Revenue breakdown, cash collected vs costs
+  Costs — Full cost breakdown (marketing, sales, fulfillment, fixed, fees, refunds)
+  P&L & FCF — Gross profit, EBITDA, net income, free cash flow, cash balance
+  Sensitivity — 2D heatmap showing how equity value changes with two variables
+  Compare Scenarios — Save baseline, modify, overlay the two
+  Export — Download inputs, monthly data, summary report
+
+
+================================================================================
+POWER MOVES: HOW TO USE THIS TO SELL / CONSULT
+================================================================================
+
+1. DIAGNOSE BROKEN UNIT ECONOMICS
+   Plug in a prospect's real numbers. If the business doesn't work at their
+   current metrics, you can show them exactly why on the cash flow chart.
+   
+   Nick Kozmin: "We developed this tool because we have a lot of customers who
+   had offers but the unit economics really didn't work."
+
+2. SHOW THE LEVERAGE POINTS
+   Change one input at a time and watch the impact:
+   - Drop outbound conversion from 2% to 0.5% → "the business breaks"
+   - Move CPM from $55 to $100 → "affects cash flow significantly"
+   - Change time to collect from 60 to 365 days → profitability goes from 2 to 6 months
+   - Cut churn from 50% to 30% → watch the equity value jump
+   
+   Use the Sensitivity tab to visualize this as a heatmap.
+
+3. BEFORE/AFTER SCENARIO
+   Use the Compare Scenarios tab:
+   a. Save current (bad) state as Scenario A
+   b. Change the 2-3 metrics you'd improve for them in the sidebar
+   c. Compare tab shows the delta: "+$4.2M equity value (+140%)"
+   
+   The delta is what you're selling. It's not "we'll improve your CTR" — it's
+   "we'll add $4M to the value of your business."
+
+4. COMPARE OFFERS
+   Model Offer A ($3,000 product) and Offer B ($6,000 product) separately.
+   Compare profit per customer per month. The higher this number, the faster
+   you reach profitability.
+   
+   Nick Kozmin: "A $3,000 offer — that's not really going to work. It's just
+   not likely to become a meaningful business."
+
+5. MODEL DIFFERENT STAGES
+   Create separate models for different business stages:
+   - Stage 1: 0 to 50 customers (high upfront costs, scaling fixed costs)
+   - Stage 2: 50+ customers (no upfront costs, different fixed cost structure)
+   Compare them to see the trajectory.
+
+6. SHARE WITH STAKEHOLDERS
+   Use the Export tab to download:
+   - Summary report (TXT) — clean text summary for investors
+   - Monthly data (CSV) — for Excel analysis
+   - Inputs (JSON) — save and reload later
+   
+   Or just share the screen in a meeting with the Streamlit app running live
+   and adjust inputs together.
+
+
+================================================================================
+KEY INSIGHTS FROM NICK KOZMIN'S FRAMEWORK
+================================================================================
+
+1. "A business is just a bunch of offers stacked together."
+   Model each offer separately. If you have multiple products, create separate
+   models and combine the results.
+
+2. "The profit per customer per month is a really important metric because it
+   allows us to compare offers."
+   High ticket with long sales cycle vs low ticket with short sales cycle —
+   profit/customer/month normalizes the comparison.
+
+3. "The K value is .2. If this K value is over one, the thing's gonna really
+   jump up."
+   The viral coefficient is the most powerful lever. K > 1 = exponential growth.
+   Even K = 0.5 meaningfully reduces your CAC.
+
+4. "How much does the churn rate really affect the value of the thing that
+   we're building?"
+   This is the core question the model answers. Every input has a quantified
+   impact on equity value. No more guessing.
+
+5. "The time to collect can really affect the business."
+   Cash collection timing is as important as revenue. You can be profitable on
+   paper and still run out of cash if collections are slow.
+
+6. "We need a discount rate and we need an inflation rate."
+   The DCF is the intellectually honest valuation method. EBITDA multiples are
+   "back of the envelope" — useful for comparison but not as rigorous.
+
+7. "This is offer-specific modeling, which is really really important."
+   Don't mix offers in one model. One model = one offer with its specific
+   pricing, costs, and conversion rates.
+
+
+================================================================================
+TYPICAL INPUT RANGES BY BUSINESS TYPE
+================================================================================
+
+SaaS Business:
+  Price: $1,000 - $50,000/year
+  Cost to Fulfill: 5-15%
+  Cost to Sell: 10-20%
+  Churn: 5-15% annual (monthly: 0.5-1.5%)
+  LTV/CAC target: 3x+
+  CPM: $30-80
+  Funnel conversion: 2-5%
+
+Service/Agency Business:
+  Price: $3,000 - $20,000/project
+  Cost to Fulfill: 25-40%
+  Cost to Sell: 10-15%
+  Churn: 30-60%
+  Time to Collect: 30-90 days
+
+E-commerce / Info Products:
+  Price: $47 - $2,000
+  Cost to Fulfill: 5-30%
+  Cost to Sell: 0-5% (often self-serve)
+  CPM: $10-40
+  Funnel conversion: 1-3%
+
+High-Ticket Consulting:
+  Price: $5,000 - $100,000+
+  Cost to Fulfill: 20-35%
+  Cost to Sell: 15-25%
+  Time to Sell: 14-60 days
+  Outbound conversion: 1-3%
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+"The business never reaches profitability"
+  → Price is too low relative to costs
+  → Churn is too high
+  → CAC is too high (CPM too expensive, conversion rates too low)
+  → Fixed costs are too high for the revenue level
+  → Time to collect is too long (cash timing issue)
+
+"Cash needed is huge"
+  → You're spending on marketing before collecting revenue
+  → Reduce media spend or switch to performance-based (commission only)
+  → Shorten time to collect (get paid upfront)
+  → Reduce upfront investment costs
+
+"Equity value is negative"
+  → The business destroys value — costs exceed revenue over the projection period
+  → Fix unit economics first, then worry about growth
+
+"LTV/CAC is below 1"
+  → You lose money on every customer you acquire
+  → Either increase LTV (higher price, lower churn, more renewals)
+  → Or decrease CAC (cheaper channels, better conversion rates)

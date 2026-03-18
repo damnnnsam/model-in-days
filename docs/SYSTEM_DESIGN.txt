@@ -1,0 +1,911 @@
+VALUATION ENGINE FOR INTERNET BUSINESSES — SYSTEM DESIGN
+==========================================================
+
+Version: 0.1 — Architecture & Ontology
+Date: March 2026
+
+
+================================================================================
+1. CONCEPTUAL ARCHITECTURE
+================================================================================
+
+The system has eight layers. Data flows strictly upward. Each layer consumes
+the output of the layer below it. No layer reaches down — if valuation needs
+a marketing metric, it gets it through the intermediate layers, not by
+directly querying the channel engine.
+
+  Layer 8: DIAGNOSTIC ENGINE
+    Why is the business worth what it's worth?
+    Which levers actually matter?
+    Where is the model fragile?
+
+  Layer 7: VALUATION ENGINE
+    DCF, terminal value, EV, equity value
+    Scenario weighting, sensitivity surfaces
+
+  Layer 6: FINANCIAL STATEMENTS
+    P&L rollup, cash flow, working capital, balance sheet dynamics
+
+  Layer 5: COST ENGINE
+    Channel costs, sales costs, fulfillment, fixed costs
+    Capacity investment triggers, scaling rules
+
+  Layer 4: REVENUE & MONETIZATION ENGINE
+    Cohort-level revenue recognition, cash collection timing
+    Retention, expansion, contraction, reactivation
+    Revenue quality scoring
+
+  Layer 3: COHORT ENGINE
+    Customer formation, tagging by channel/segment/date
+    Cohort-specific retention curves, LTV profiles
+
+  Layer 2: SALES & CONVERSION PIPELINE
+    Qualification, capacity allocation, close dynamics
+    Pipeline aging, deal velocity, bottleneck detection
+
+  Layer 1: CHANNEL ENGINES
+    Outbound, Paid, Content, Referral, PLG, etc.
+    Each with its own physics: depletion, auction, asset, network, capacity
+
+  Layer 0: ASSUMPTIONS & CONFIGURATION
+    Time parameters, business type, scenario definitions
+    Measured vs inferred vs strategic assumption tagging
+
+Data flow:
+
+  Channel Engines produce leads/opportunities (with quality tags)
+       ↓
+  Sales Pipeline converts opportunities to customers (capacity-constrained)
+       ↓
+  Cohort Engine forms customer cohorts (tagged by source, date, segment)
+       ↓
+  Revenue Engine computes revenue streams per cohort (retention, expansion)
+       ↓
+  Cost Engine aggregates all costs (channel, sales, fulfillment, fixed)
+       ↓
+  Financial Statements build P&L, cash flow, working capital
+       ↓
+  Valuation Engine computes DCF, EV, equity value, scenarios
+       ↓
+  Diagnostic Engine explains what drives value and where it's fragile
+
+
+MODULARITY RULES:
+
+- Each channel engine is a plugin. Adding a new channel does not touch
+  any other channel or any downstream layer.
+- Each monetization model (subscription, one-time, usage, etc.) is a plugin
+  in the revenue engine.
+- Scenarios are overlays on assumptions, not forks of the entire model.
+- Time grain is configurable per module. Channel engines can run daily
+  while financial statements aggregate monthly.
+
+
+================================================================================
+2. ONTOLOGY — THE ATOMIC UNITS
+================================================================================
+
+The model has five fundamental entity types:
+
+A. STATE TRANSITION EVENT
+   The true atomic unit. Everything in the model is a state transition:
+   impression → click, lead → opportunity, customer → churned, etc.
+   Each transition has: rate, delay, cost, capacity constraint, quality signal.
+
+B. CHANNEL
+   A self-contained acquisition engine with its own laws of motion, internal
+   state, and output characteristics.
+
+C. COHORT
+   A group of customers formed at a point in time from a specific source,
+   sharing retention and monetization characteristics.
+
+D. TIME PERIOD
+   The temporal grain at which a given calculation is performed.
+   Different calculations have different natural grains.
+
+E. SCENARIO
+   A named set of assumption overrides layered on top of the base case.
+
+
+WHY STATE TRANSITIONS, NOT CUSTOMERS:
+
+A customer is a consequence of transitions, not a primitive. The model must
+understand the entire chain of transitions that produced the customer, because:
+- The cost of the customer depends on the efficiency of each transition
+- The quality of the customer depends on which chain produced them
+- The timing depends on the lag structure of each transition
+- Capacity constraints can bottleneck at any transition point
+
+A customer acquired through content → organic lead → self-serve signup
+has fundamentally different economics than one acquired through
+cold email → SDR qualification → AE demo → enterprise close.
+
+Same "customer." Radically different valuation implications.
+
+
+================================================================================
+3. CHANNEL ENGINE FRAMEWORK
+================================================================================
+
+Channels are NOT all funnels with different conversion rates.
+They have fundamentally different mathematical structures.
+
+FIVE CHANNEL ARCHETYPES:
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ARCHETYPE 1: DEPLETION MODEL (Outbound / Cold Email)              │
+│                                                                     │
+│ You have a finite pool of prospects (TAM). Each contact depletes   │
+│ the pool. Recontact has declining returns. Performance degrades    │
+│ as you exhaust the addressable market.                             │
+│                                                                     │
+│ Key dynamics:                                                       │
+│ - Pool size and depletion rate                                      │
+│ - Recontact cycles with conversion decay                           │
+│ - Infrastructure constraints (inboxes, domains, sending limits)    │
+│ - Deliverability as a state variable (degrades, can be repaired)   │
+│ - Copy/angle fatigue requiring rotation                            │
+│ - List quality tiers (best prospects contacted first)              │
+│                                                                     │
+│ Mathematical character: Inventory drawdown with replenishment      │
+│ and degrading marginal returns                                      │
+│                                                                     │
+│ State variables:                                                    │
+│ - remaining_pool (TAM - contacts_made + new_TAM_entries)           │
+│ - contact_history per prospect (0, 1, 2, ... touches)              │
+│ - deliverability_score per domain/inbox                            │
+│ - infrastructure_capacity (inboxes × sends_per_day)                │
+│                                                                     │
+│ The output rate is NOT constant. It follows:                        │
+│   leads(t) = capacity(t) × pool_quality(t) × deliverability(t)    │
+│              × response_rate(recontact_cycle) × conversion_rate    │
+│                                                                     │
+│ Where pool_quality degrades as best prospects are consumed first,  │
+│ and response_rate decays with each recontact cycle:                │
+│   response_rate(cycle) = base_rate × decay_factor^(cycle - 1)     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ARCHETYPE 2: AUCTION/FLOW MODEL (Paid Ads)                         │
+│                                                                     │
+│ You're buying attention from a platform in a real-time auction.     │
+│ Performance is a function of spend level, competition, creative    │
+│ quality, and audience targeting. You never "run out" of audience    │
+│ but marginal costs rise and returns diminish at scale.              │
+│                                                                     │
+│ Key dynamics:                                                       │
+│ - CPM as a function of spend level (marginal cost curve)           │
+│ - Creative fatigue (CTR decays over time per creative)             │
+│ - Learning phase (new campaigns underperform initially)            │
+│ - Retargeting layers (different economics for warm audiences)      │
+│ - Audience saturation (frequency caps, diminishing reach)          │
+│ - Platform dependency risk                                          │
+│                                                                     │
+│ Mathematical character: Marginal cost curve with creative cycles   │
+│                                                                     │
+│ The key equation:                                                   │
+│   CPA(spend) = base_CPA × (spend / base_spend)^elasticity         │
+│   where elasticity > 0 means CPA rises with scale                 │
+│                                                                     │
+│ Creative fatigue:                                                   │
+│   CTR(t) = CTR_0 × exp(-fatigue_rate × days_since_launch)         │
+│   + CTR_floor                                                       │
+│                                                                     │
+│ This means paid channels have a natural "efficient frontier"       │
+│ of spend — beyond which marginal CAC makes acquisition             │
+│ uneconomical. The model must find and expose this frontier.        │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ARCHETYPE 3: ASSET ACCUMULATION MODEL (Content / SEO / YouTube)    │
+│                                                                     │
+│ You're building an inventory of content assets. Each asset has a   │
+│ creation cost, a ramp period, a peak, and a long tail. The         │
+│ portfolio compounds over time as assets accumulate.                 │
+│                                                                     │
+│ Key dynamics:                                                       │
+│ - Publishing cadence (assets created per period)                   │
+│ - Per-asset lifecycle: creation → indexing/distribution → peak     │
+│   → long-tail decay                                                │
+│ - Portfolio effect: total traffic = sum of all asset lifecycles    │
+│ - Domain authority / channel authority compounding                  │
+│ - Non-linear inflection: early content yields little, but the     │
+│   100th piece can yield more than the first 50 combined            │
+│ - Branded search lift: content creates brand awareness that        │
+│   improves conversion across ALL channels                          │
+│ - Asset type variation: evergreen vs topical vs viral              │
+│                                                                     │
+│ Mathematical character: Portfolio of decaying/compounding assets   │
+│                                                                     │
+│ Per-asset traffic model:                                            │
+│   traffic(asset, t) = peak × ramp(t - publish_date)               │
+│                        × decay(t - publish_date - ramp_period)     │
+│                                                                     │
+│ Total traffic:                                                      │
+│   traffic(t) = Σ traffic(asset_i, t) × authority_multiplier(t)    │
+│                                                                     │
+│ Where authority_multiplier compounds with total content inventory  │
+│ and engagement signals.                                             │
+│                                                                     │
+│ This channel is UNDERVALUED by any model that doesn't account      │
+│ for long-tail compounding. A business with 500 content assets      │
+│ generating steady organic traffic has fundamentally different      │
+│ terminal value than one relying on paid ads.                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ARCHETYPE 4: NETWORK/THRESHOLD MODEL (Referrals / WOM / Virality) │
+│                                                                     │
+│ Output depends on installed base, satisfaction, and network         │
+│ structure. The channel effectively doesn't exist until enough      │
+│ customers exist and are happy enough to refer.                     │
+│                                                                     │
+│ Key dynamics:                                                       │
+│ - Emergence threshold: referrals ≈ 0 until installed_base > N     │
+│   AND satisfaction > S                                              │
+│ - K-value as a function of satisfaction, incentive, and product    │
+│ - Network topology effects (some customers refer more)             │
+│ - Referred customers often have higher retention                   │
+│ - Incentive cost per referral vs organic WOM                       │
+│ - Viral cycle time determines compounding speed                    │
+│                                                                     │
+│ Mathematical character: Threshold activation + exponential/        │
+│ logistic growth capped by TAM and network saturation               │
+│                                                                     │
+│   referral_rate(t) = 0 if active_customers(t) < threshold          │
+│   referral_rate(t) = active_customers(t) × invites_per_customer   │
+│                       × accept_rate × (1 - market_saturation(t))  │
+│                                                                     │
+│ Where market_saturation = cumulative_reached / reachable_network   │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ARCHETYPE 5: THROUGHPUT/CAPACITY MODEL (Enterprise Sales / SDRs)   │
+│                                                                     │
+│ Output is limited by human capacity, not demand or spend.           │
+│ Scaling requires hiring, onboarding, and ramping people.           │
+│                                                                     │
+│ Key dynamics:                                                       │
+│ - Headcount plan with hiring timeline                              │
+│ - Ramp period per rep (new reps underperform for N months)         │
+│ - Quota capacity per ramped rep                                    │
+│ - Sales cycle length                                                │
+│ - Pipeline coverage requirements                                   │
+│ - Management span (need managers every N reps)                     │
+│ - Attrition and replacement lag                                    │
+│                                                                     │
+│ Mathematical character: Discrete capacity with ramp functions      │
+│                                                                     │
+│   effective_capacity(t) = Σ ramp_curve(rep_i, t - hire_date_i)    │
+│   output(t) = min(demand(t), effective_capacity(t))               │
+│                                                                     │
+│ This is where most models fail: they assume you can instantly      │
+│ convert demand into customers. In reality, sales capacity is       │
+│ the binding constraint for most B2B businesses.                    │
+└─────────────────────────────────────────────────────────────────────┘
+
+CHANNEL INTERACTIONS:
+
+Channels are not independent. The model must represent:
+- Content improves paid ad conversion (trust/brand effect)
+- Outbound credibility increases when prospects can find content
+- Retargeting connects paid to content audiences
+- Referrals only emerge from satisfied customers (retention feeds virality)
+- SEO improves when paid drives branded search volume
+- Channel mix affects blended CAC, which affects reinvestment capacity
+
+These interactions should be modeled as MULTIPLIERS on downstream conversion
+rates, not as separate channels. Example:
+
+  close_rate(channel=paid, t) = base_close_rate
+    × (1 + content_authority_boost(t))
+    × (1 + brand_awareness_factor(t))
+
+Where content_authority_boost is a function of content asset inventory.
+
+
+================================================================================
+4. COHORT ENGINE DESIGN
+================================================================================
+
+Every customer enters the system as a member of a cohort.
+
+COHORT IDENTITY (tags applied at formation):
+- acquisition_date (day)
+- acquisition_channel
+- acquisition_campaign (optional)
+- customer_segment / ICP tier
+- contract_type (monthly, annual, multi-year, one-time)
+- pricing_tier
+- initial_ACV
+- geography (optional)
+- acquisition_cost (actual CAC for this cohort)
+
+COHORT LIFECYCLE:
+
+  Formation → Onboarding → Active → {Retained | Churned | Expanded | Contracted}
+                                          ↓              ↓
+                                     Renewed         Reactivated?
+                                          ↓
+                                     Expanded/Contracted
+                                          ↓
+                                     (repeat each period)
+
+Each cohort has its own:
+- Retention curve: survival_rate(months_since_acquisition)
+- Expansion rate: expansion_revenue(months_since_acquisition)
+- Contraction rate: contraction(months_since_acquisition)
+- Gross margin profile
+- Support burden (cost to serve)
+- Payment timing (cash collection profile)
+
+CRITICAL INSIGHT: CHANNEL-SPECIFIC RETENTION
+
+Customers from different channels have different retention curves.
+This is one of the most important and most ignored dynamics in financial
+modeling.
+
+Evidence patterns:
+- Organic/content-acquired customers: higher retention (they sought you out)
+- Paid-acquired customers: lower retention (lower intent, shallower commitment)
+- Referred customers: highest retention (trust transfer from referrer)
+- Outbound-acquired customers: variable (depends on fit quality)
+- Discount/promotion-acquired: lowest retention (price-sensitive)
+
+The model MUST support channel-specific retention curves, because:
+- A business shifting from paid to organic acquisition is improving
+  revenue quality, even if top-line growth looks the same
+- LTV varies by channel, so blended LTV/CAC hides the real story
+- Terminal value should reflect the steady-state channel mix, not
+  the current (possibly temporary) one
+
+RETENTION CURVE MECHANICS:
+
+Rather than a single churn rate, use cohort survival curves:
+
+  Simple: exponential decay
+    surviving(t) = (1 - monthly_churn)^t
+
+  Better: piecewise (early churn vs steady-state)
+    surviving(t) = (1 - early_churn)^min(t, activation_period)
+                   × (1 - steady_churn)^max(0, t - activation_period)
+
+  Best: empirical survival curve per channel
+    surviving(t) = lookup_table[channel][t]
+
+The model should default to piecewise and support empirical curves
+when data is available.
+
+
+================================================================================
+5. REVENUE QUALITY AND CASH FLOW TIMING
+================================================================================
+
+Not all revenue is equal. The model must distinguish:
+
+REVENUE QUALITY DIMENSIONS:
+- Recurring vs one-time
+- Contracted vs at-will
+- Pre-paid vs in-arrears
+- High-retention vs fragile
+- Expandable vs flat
+- High-margin vs low-margin
+- Channel-specific quality score
+
+CASH FLOW TIMING:
+
+The gap between revenue recognition and cash collection is critical for
+working capital and scaling capacity.
+
+  Revenue booked ≠ Cash collected ≠ Cash available for reinvestment
+
+Model explicitly:
+- Payment terms (upfront, monthly, quarterly, net-30, net-60)
+- Collection efficiency (realization rate)
+- Refund timing and rates
+- Revenue recognition schedule (especially for annual contracts)
+
+Cash conversion cycle:
+  days_to_cash = time_to_market + time_to_sell + time_to_collect
+
+This directly determines how fast the business can reinvest.
+A business with 30-day cash conversion can scale 12x faster than one
+with 365-day conversion, all else equal.
+
+REINVESTMENT DYNAMICS:
+
+The relationship between cash generation and reinvestment is a
+first-order valuation driver:
+
+  reinvestable_cash(t) = cash_balance(t) - minimum_cash_reserve
+  max_new_spend(t) = reinvestable_cash(t) / payback_period_months
+
+If the business generates cash faster than it can deploy it into
+efficient acquisition channels, growth is demand-constrained.
+If it can deploy faster than it generates, growth is cash-constrained.
+
+The model must identify which constraint is binding at each point
+in time.
+
+
+================================================================================
+6. COST ENGINE
+================================================================================
+
+Costs fall into five categories with different scaling behaviors:
+
+A. CHANNEL VARIABLE COSTS
+   Scale with channel activity (ad spend, SDR compensation, content creation)
+   Each channel has its own cost structure.
+
+B. SALES VARIABLE COSTS
+   Scale with deals closed (commissions, bonuses)
+   Commission = close_price × commission_rate
+
+C. FULFILLMENT/COGS
+   Scale with active customers (hosting, support, delivery)
+   Can be step-function (need a new support rep every 50 customers)
+
+D. FIXED COSTS
+   Don't scale with volume in the short run (rent, engineering, executive)
+   But step up at capacity thresholds (need a new office, new team, etc.)
+
+E. CAPACITY INVESTMENT
+   Discrete investments triggered by growth:
+   - Hire SDR when pipeline exceeds capacity
+   - Hire CSM when customer count exceeds ratio
+   - Infrastructure upgrade when traffic exceeds threshold
+
+The cost engine should support:
+- Linear scaling (cost_per_unit × units)
+- Step functions (fixed blocks that trigger at thresholds)
+- Economies of scale (cost_per_unit decreases with volume)
+- Diseconomies of scale (cost_per_unit increases with volume)
+- Time-varying costs (inflation, wage growth, contract renegotiation)
+
+
+================================================================================
+7. FINANCIAL STATEMENT CONSTRUCTION
+================================================================================
+
+The P&L is built bottom-up from channel and cohort data:
+
+  Revenue (by channel, by cohort, by type)
+  - New customer revenue
+  - Renewal revenue
+  - Expansion revenue
+  - Reactivation revenue
+  = TOTAL REVENUE
+
+  - COGS / Cost to Fulfill (by cohort)
+  - Transaction fees
+  = GROSS PROFIT
+
+  - Channel costs (by channel)
+  - Sales costs
+  = CONTRIBUTION PROFIT (after customer acquisition)
+
+  - Fixed costs
+  - Capacity investments (amortized or expensed)
+  = EBITDA
+
+  - Depreciation & Amortization
+  = EBIT
+
+  - Interest expense
+  - Taxes (on positive income only)
+  = NET INCOME
+
+  UNLEVERED FREE CASH FLOW:
+  = EBIT × (1 - tax_rate)
+  + D&A
+  - CapEx
+  - Change in working capital
+  = UFCF
+
+  The model should compute both UFCF (for enterprise value) and
+  levered FCF (for equity value).
+
+
+================================================================================
+8. VALUATION ENGINE
+================================================================================
+
+DCF ARCHITECTURE:
+
+The DCF must be mechanically connected to the operating model.
+It does NOT get its own growth rate assumption.
+Growth is an OUTPUT of the channel engines, not an INPUT to valuation.
+
+  Enterprise Value = PV(explicit period FCF) + PV(terminal value)
+  Equity Value = EV - Net Debt + Excess Cash
+
+TERMINAL VALUE — THE HARDEST PROBLEM:
+
+Terminal value typically dominates DCF models (60-80% of EV).
+This is a sign of model weakness, not model correctness.
+
+Approaches (in order of sophistication):
+
+1. Gordon Growth Model (standard)
+   TV = FCF_terminal × (1 + g) / (WACC - g)
+   Problem: Very sensitive to g and WACC. Small changes = huge swings.
+
+2. Exit Multiple
+   TV = EBITDA_terminal × exit_multiple
+   Problem: Where does the multiple come from? Circular.
+
+3. Convergence-based terminal (recommended)
+   Extend the explicit forecast until growth, margins, and reinvestment
+   reach steady state. Then apply Gordon Growth with the ACTUAL
+   steady-state growth implied by the channel engines.
+
+   steady_state_growth = reinvestment_rate × return_on_invested_capital
+   TV = FCF_terminal × (1 + steady_state_growth) / (WACC - steady_state_growth)
+
+   This is better because terminal growth is DERIVED from the business
+   mechanics, not assumed.
+
+4. Fade to maturity
+   Gradually fade growth rate, margins, and reinvestment toward
+   industry averages over 5-10 years post-explicit period.
+   Most realistic but requires industry benchmarks.
+
+TERMINAL VALUE CONSTRAINTS:
+
+The model should enforce:
+- terminal_growth < WACC (mathematical necessity)
+- terminal_growth < GDP_growth (economic realism)
+- terminal_ROIC converges toward WACC (competition erodes excess returns)
+- TV / EV ratio is flagged if > 70% (warns user)
+- implied_terminal_multiple is computed and compared to market
+
+DISCOUNT RATE:
+
+WACC should be adjustable but the model should suggest:
+- Risk-free rate (from treasury yields)
+- Equity risk premium (country + size + stage)
+- Beta (if comparable public companies exist)
+- Cost of debt (if applicable)
+- Channel quality adjustment: businesses with more durable channels
+  (organic, content) deserve a lower discount rate than those
+  dependent on fragile channels (paid, outbound)
+
+SCENARIO-WEIGHTED VALUATION:
+
+Rather than one DCF number, produce:
+
+  Scenario          Probability   Equity Value
+  ─────────────────────────────────────────────
+  Base case         40%           $12.0M
+  Upside            20%           $28.5M
+  Downside          25%           $4.2M
+  Stress / failure  15%           -$1.8M
+  ─────────────────────────────────────────────
+  Weighted value    100%          $11.3M
+
+Each scenario is a named set of assumption overrides:
+- Upside: faster channel ramp, better retention, lower churn
+- Downside: slower ramp, higher churn, CAC inflation
+- Stress: channel failure, cash crunch, competitive pressure
+
+VALUE ATTRIBUTION:
+
+The diagnostic engine should decompose EV by driver:
+
+  "Of your $12M enterprise value:"
+  - $4.2M comes from the organic content flywheel (35%)
+  - $3.8M comes from outbound-acquired cohorts (32%)
+  - $2.4M comes from paid acquisition (20%)
+  - $1.6M comes from referral/viral (13%)
+
+  "Top 3 value levers:"
+  1. Reducing churn by 5pp → +$2.8M EV (+23%)
+  2. Adding content channel at month 6 → +$1.9M EV (+16%)
+  3. Improving close rate by 3pp → +$1.2M EV (+10%)
+
+This is what makes the model useful for operators, not just analysts.
+
+
+================================================================================
+9. SENSITIVITY ENGINE
+================================================================================
+
+Three types of sensitivity analysis:
+
+A. TORNADO CHART (one-at-a-time)
+   Vary each input ±20% and rank by EV impact.
+   Shows which variables matter most.
+
+B. TWO-DIMENSIONAL SURFACE
+   Pick any two variables, compute EV across a grid.
+   Shows interaction effects and nonlinearities.
+
+C. SCENARIO NARRATIVES (structured what-ifs)
+   Not arbitrary parameter toggles. Named, coherent scenarios:
+   - "Outbound saturates at month 8, paid scales to fill"
+   - "Content flywheel kicks in at month 18, reduces blended CAC by 40%"
+   - "Sales capacity bottleneck: can't hire fast enough"
+   - "Retention improvement from product investment"
+
+   Each scenario changes multiple correlated parameters together,
+   which is more realistic than varying one at a time.
+
+ASSUMPTION CONFIDENCE TAGGING:
+
+Every input should be tagged:
+  - MEASURED: from actual operating data
+  - ESTIMATED: inferred from benchmarks or limited data
+  - ASSUMED: strategic guess, no data support
+
+The sensitivity engine should weight its analysis toward
+ASSUMED inputs, because those are where uncertainty lives.
+
+
+================================================================================
+10. TIME ENGINE AND RESOLUTION STRATEGY
+================================================================================
+
+Different calculations deserve different time granularity:
+
+  DAILY (justified by channel mechanics):
+  - Cold email: send volume, deliverability, bounce rate, reply rate
+  - Paid ads: daily spend, CPM, CTR, CPA
+  - Cash balance (critical for runway calculations)
+  - Sales pipeline aging
+
+  WEEKLY (useful intermediate grain):
+  - Content publishing and traffic ramp
+  - SDR activity and pipeline creation
+  - Lead flow and qualification rates
+
+  MONTHLY (standard financial grain):
+  - Revenue recognition and reporting
+  - Cohort formation and retention
+  - P&L and cash flow statements
+  - Fixed cost accrual
+
+  QUARTERLY / ANNUAL (valuation and reporting):
+  - DCF period aggregation
+  - Valuation comparisons
+  - Board-level metrics
+
+IMPLEMENTATION:
+
+The internal simulation should run at DAILY granularity (this is
+computationally trivial — 2500 days × 10 channels = 25,000 state
+updates, well under 100ms). Display and reporting layers aggregate
+to whatever grain the user selects.
+
+
+================================================================================
+11. ENTITY SCHEMA / DATA MODEL
+================================================================================
+
+CORE ENTITIES:
+
+  Channel {
+    id, name, archetype (depletion|auction|asset|network|capacity)
+    activation_day, ramp_period, ramp_curve
+    is_active: bool
+    // archetype-specific parameters stored as typed config
+  }
+
+  ChannelState {
+    channel_id, day
+    remaining_pool, deliverability_score, authority_score, etc.
+    leads_generated, cost_incurred
+  }
+
+  ConversionChain {
+    channel_id
+    stages: [{name, conversion_rate, delay_days, capacity_limit}]
+  }
+
+  Cohort {
+    formation_day, channel_id, segment
+    customer_count (fractional OK for expected values)
+    initial_acv, contract_type, payment_terms
+    retention_curve_id
+    quality_score
+  }
+
+  CohortState {
+    cohort_id, day
+    active_customers, revenue, cash_collected
+    churned, expanded, contracted
+  }
+
+  CostItem {
+    category (channel|sales|fulfillment|fixed|capacity)
+    scaling_type (linear|step|per_customer|fixed)
+    amount, trigger_threshold
+  }
+
+  Scenario {
+    id, name, probability
+    overrides: {parameter_path: value}
+  }
+
+  Assumption {
+    parameter_path, value
+    confidence: (measured|estimated|assumed)
+    source: string
+  }
+
+
+MEASURES AND DIMENSIONS:
+
+  Measures (things we compute):
+    leads, opportunities, customers, revenue, cash, costs, profit,
+    FCF, EV, equity_value, share_price, CAC, LTV, payback,
+    retention_rate, expansion_rate, margins, ROIC, K_value
+
+  Dimensions (how we slice):
+    time (day/week/month/quarter/year)
+    channel
+    cohort
+    segment
+    scenario
+    contract_type
+    geography
+
+
+================================================================================
+12. RECOMMENDED MVP — WHAT TO BUILD FIRST
+================================================================================
+
+BUSINESS TYPE: B2B SaaS or high-ticket service business with
+measurable GTM. This is where the model adds most value vs existing tools.
+
+CHANNELS FOR V1 (three, covering three different archetypes):
+  1. Cold email / outbound (depletion model) — with TAM depletion,
+     recontact cycles, deliverability, infrastructure constraints
+  2. Paid ads (auction model) — with marginal CPA curves, creative
+     fatigue, learning phases
+  3. Content / SEO (asset model) — with publishing cadence, per-asset
+     lifecycle, portfolio compounding
+
+V2 CHANNELS:
+  4. Referrals (network model)
+  5. Enterprise sales (capacity model)
+  6. Product-led growth
+
+TIME GRAIN: Daily internally, monthly display, with daily drill-down
+available for channel-level detail.
+
+WHAT TO EXCLUDE INITIALLY:
+- Multiple business types (build for one, abstract later)
+- Stochastic / Monte Carlo (start deterministic, add later)
+- Multi-product / multi-offer stacking
+- Real-time API ingestion
+- Geography segmentation
+- Multi-currency
+
+WHAT MUST BE ARCHITECTED NOW (even if not built in V1):
+- Channel as a plugin interface (so adding channels doesn't break anything)
+- Cohort-level data structure (even if V1 only uses channel-level aggregation)
+- Scenario overlay system (even if V1 only supports 2-3 scenarios)
+- Assumption confidence tagging (even if V1 doesn't use it for weighting)
+- Revenue quality scoring (even if V1 computes but doesn't weight by it)
+
+
+================================================================================
+13. DESIGN CRITIQUE — WHERE THIS COULD GO WRONG
+================================================================================
+
+FAKE PRECISION RISK:
+The biggest danger. More parameters ≠ more accuracy. A model with
+50 inputs that are all guesses is worse than a model with 10 inputs
+that are measured. The UI must make it obvious which inputs are
+measured vs assumed, and the sensitivity engine must focus attention
+on the assumptions that actually matter.
+
+DATA REQUIREMENTS:
+Most businesses don't have deliverability scores, per-asset traffic
+curves, or cohort-level retention by channel. The model must work
+with SPARSE DATA and progressively improve as data becomes available.
+Defaults must be sensible. The model must not break when half the
+inputs are left at defaults.
+
+OVER-ENGINEERING RISK:
+The channel archetypes are intellectually satisfying but V1 should
+implement them as PARAMETERIZED versions of a common structure, not
+five completely different engines. The differences should be in the
+parameters and dynamics, not in the code architecture.
+
+TERMINAL VALUE DOMINANCE:
+Even with a better model, terminal value will still be significant.
+The key mitigation: extend the explicit forecast period until the
+business reaches genuine steady state (not just 5 years because
+that's what textbooks say). If steady state takes 8 years of channel
+evolution, model 8 years explicitly.
+
+WHAT IS ESSENTIAL FOR EACH VERSION:
+
+  V1: Channel-specific modeling with depletion/saturation,
+      cohort-aware retention, proper DCF with channel-derived
+      terminal growth, time slider, scenario comparison.
+      The upgrade from V0 that makes this genuinely better
+      than anything else available.
+
+  V2: Full channel archetype implementations, capacity constraints,
+      revenue quality scoring, value attribution by channel,
+      assumption confidence tagging, export/share.
+
+  V3: API ingestion, live updates, stochastic scenarios,
+      multi-product, comparative analysis across businesses.
+
+
+================================================================================
+14. IMPLEMENTATION RECOMMENDATION
+================================================================================
+
+KEEP THE STACK:
+Python + Streamlit + Plotly + NumPy is correct for this phase.
+The simulation is computationally trivial. The value is in the
+modeling logic, not the infrastructure.
+
+ARCHITECTURE CHANGE FROM V0:
+The current code has a single run_simulation() function that does
+everything in one loop. This must be refactored into:
+
+  1. ChannelEngine base class with archetype subclasses
+  2. Pipeline that aggregates channel outputs into customer formation
+  3. CohortTracker that manages cohort lifecycle
+  4. CostAggregator that computes all costs
+  5. FinancialStatementBuilder that constructs P&L and cash flow
+  6. ValuationEngine that computes DCF/EV/equity
+  7. DiagnosticEngine that explains the results
+
+Each is a separate module. The main simulation loop calls them
+in order. Adding a channel means subclassing ChannelEngine and
+registering it. Nothing else changes.
+
+WHAT SHOULD BE DETERMINISTIC VS PROBABILISTIC:
+V1: Everything deterministic. Scenarios handled as discrete
+    named alternatives with user-assigned probabilities.
+V2: Consider adding confidence intervals around key outputs
+    by running scenarios with parameter distributions.
+V3: Full Monte Carlo if warranted.
+
+EXTENSIBILITY FOR LIVE UPDATES:
+The model inputs should be a serializable data structure (JSON/dataclass)
+that can be populated from:
+  - Manual UI input (current)
+  - Saved file (current)
+  - API call (future)
+  - Database query (future)
+  - Real-time event stream (far future)
+
+The computation engine must be stateless: given inputs, produce outputs.
+No hidden state, no side effects. This makes it trivially parallelizable
+and testable.
+
+
+================================================================================
+SUMMARY: THE CORE INSIGHT
+================================================================================
+
+The current model (V0) treats the business as:
+  "N leads per day at a constant rate forever → revenue → DCF"
+
+The target model treats the business as:
+  "A portfolio of acquisition engines, each with its own physics,
+   feeding cohorts with different economics, constrained by capacity
+   and cash, evolving through phases, producing cash flows whose
+   quality and durability vary — and value emerges from all of that."
+
+The gap between these two descriptions is the gap between a
+spreadsheet exercise and a genuine valuation engine.
+
+Two businesses with the same revenue today can have radically different
+enterprise values because:
+- One has a compounding content channel and a 95% retention rate
+  from organic acquisition → high-quality, durable FCF → high EV
+- The other has rising CPAs on paid ads and 70% retention from
+  discount-acquired customers → fragile, degrading FCF → low EV
+
+The model must be able to express and quantify this difference.
+That is its reason for existing.

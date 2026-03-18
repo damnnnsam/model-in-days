@@ -1,0 +1,140 @@
+CODEBASE ARCHITECTURE
+=====================
+
+PROJECT STRUCTURE
+-----------------
+financial_modeling/
+  app.py                    Main Streamlit entry point. Wires sidebar inputs → engine → charts.
+  requirements.txt          streamlit, plotly, numpy, pandas
+  engine/
+    __init__.py
+    inputs.py               ModelInputs dataclass — every parameter with defaults
+    simulation.py           Day-by-day simulation loop, produces SimulationResult
+    valuation.py            DCF + EBITDA multiple → enterprise value → equity value
+    metrics.py              Derived KPIs (CAC, LTV, margins, time to profitability, etc.)
+  ui/
+    __init__.py
+    sidebar.py              Streamlit sidebar — all input widgets organized by section
+    charts.py               Plotly chart builders (customers, revenue, costs, P&L, FCF, waterfall, heatmap, scenario overlay)
+    dashboard.py            KPI cards, valuation panel, sensitivity analysis, scenario comparison, export
+  docs/
+    01_codebase.txt         This file
+    02_financial_concepts.txt  Every financial concept and formula in the model
+    03_usage_guide.txt      How to use the tool, based on Nick Kozmin's walkthrough
+  transcript_how_to_use_modelling.txt   Full transcript of Nick Kozmin's 34-minute demo video
+
+
+DATA FLOW
+---------
+1. User adjusts inputs in Streamlit sidebar
+2. sidebar.py returns a ModelInputs dataclass
+3. app.py calls run_simulation(inputs) → SimulationResult (daily arrays)
+4. app.py calls to_monthly(sim) → pandas DataFrame (monthly aggregates)
+5. app.py calls compute_kpis(inputs, sim) → KPIMetrics
+6. app.py calls compute_valuation(inputs, sim) → ValuationResult
+7. UI renders: KPI cards, tabs (Valuation, Customers, Revenue, Costs, P&L, Sensitivity, Compare, Export)
+
+
+FILE-BY-FILE BREAKDOWN
+----------------------
+
+engine/inputs.py
+  ModelInputs dataclass with ~55 fields, organized into sections:
+  - Starting State: cash_in_bank, assets, liabilities, customer_count, TAM, upfront_investment_costs, debt, interest_rate
+  - Sales: cost_to_sell (% of P), time_to_sell (days), avg_deals_per_rep_per_month
+  - Channel toggles: use_inbound, use_outbound, use_organic, use_viral
+  - Inbound: media_spend, cpm, ctr, funnel_conversion_rate, time_to_market_inbound, lead_conversion_rate_inbound
+  - Outbound: outbound_salary, contacts_per_month, number_of_sdrs, outbound_conversion_rate, time_to_market_outbound, lead_conversion_rate_outbound
+  - Organic: organic_views_per_month, organic_view_to_lead_rate, lead_to_customer_rate_organic, time_to_market_organic, organic_cost_per_month
+  - Product: price_of_offer (P), realization_rate (RR), cost_to_fulfill (c_f), time_to_collect (t_c), refund_period, refund_rate, contract_length
+  - Renewals: churn_rate, price_of_renewal, cost_to_sell_renewal, cost_to_fulfill_renewal, time_to_collect_renewal, renewal_rate_of_renewals
+  - Viral: invites_per_customer, conversion_rate_per_invite, viral_time, viral_start, cost_to_sell_viral, cost_to_market_viral
+  - Administration: transaction_fee, fixed_costs_per_month, fixed_cost_increase_per_100_customers
+  - Valuation: tax_rate, inflation_rate, time_max, number_of_shares, projection_period_dcf, discount_rate, perpetual_growth_rate, enterprise_multiple_ebitda, projection_period_ebitda
+
+engine/simulation.py
+  SimulationResult dataclass: holds daily numpy arrays for customers, revenue, costs, P&L, cash.
+  
+  run_simulation(inputs) → SimulationResult
+    Core loop runs day 0 to time_max:
+    1. Compute daily lead rates per channel (constant rates from monthly inputs)
+    2. Apply time delays (time_to_market + time_to_sell) to convert leads → customers
+    3. For each day's new customers:
+       - Book revenue (P × RR)
+       - Spread cash collection over time_to_collect days
+       - Apply sales cost (c_s × P), fulfillment cost (c_f × P spread over contract)
+       - Schedule refund at refund_period with refund_rate probability
+       - Schedule renewal at contract_length with (1 - churn_rate) probability
+    4. Process renewals: book renewal revenue, costs, schedule next renewal-of-renewal
+    5. Compute viral: active_customers × invites/contract_length × conversion_rate, delayed by viral_time
+    6. Track active customers: previous + new - churned - refunded
+    7. Compute marketing costs (media spend + SDR salaries + organic costs + viral costs)
+    8. Compute fixed costs (base + scaling per 100 customers)
+    9. Build P&L: gross_profit = cash_collected - COGS; EBITDA = gross_profit - opex; net_income = EBIT - tax - interest
+    10. FCF = net_income; cash_balance = running sum starting from cash_in_bank - upfront_costs
+
+  to_monthly(sim) → DataFrame
+    Aggregates daily arrays into 30-day buckets. Flow fields summed, snapshot fields take end-of-month value.
+
+engine/valuation.py
+  ValuationResult dataclass: pv_fcf, terminal_value, pv_terminal_value, enterprise_value_dcf, equity_value_dcf, share_price_dcf, trailing_ebitda, enterprise_value_ebitda, equity_value_ebitda, share_price_ebitda, net_debt, cash_at_valuation
+
+  compute_valuation(inputs, sim) → ValuationResult
+    DCF:
+      - Discount each day's FCF back to day 0 using daily discount factor
+      - Terminal value via Gordon Growth Model: FCF_annual × (1 + g) / (r - g)
+      - Enterprise value = PV(FCF) + PV(Terminal Value)
+      - Equity value = EV - debt + cash
+    EBITDA Multiple:
+      - Trailing 12-month EBITDA at projection point × multiple
+      - Same equity bridge
+
+engine/metrics.py
+  KPIMetrics dataclass with ~20 fields.
+  
+  compute_kpis(inputs, sim) → KPIMetrics
+    - CAC blended: total (marketing + sales spend) / total new customers
+    - CAC per channel: channel-specific spend / channel customers
+    - LTV: first purchase contribution + geometric series of renewal contributions
+    - LTV/CAC ratio
+    - Payback period: CAC / daily revenue rate
+    - Margins: trailing 30-day gross, EBITDA, net margins
+    - Time to profitability: first day cumulative FCF crosses zero
+    - Cash consumption: max deficit in cash balance
+    - Cash needed: how much additional funding required
+    - Profit per customer per month: (trailing revenue - trailing costs) / active customers
+    - K value: invites × conversion rate (viral coefficient)
+
+ui/sidebar.py
+  render_sidebar() → ModelInputs
+    Streamlit sidebar with collapsible expanders per section.
+    Each input has help text/tooltip matching the SPIO definitions.
+
+ui/charts.py
+  Chart functions return plotly Figure objects:
+    - customers_chart: active + cumulative over time
+    - new_customers_by_channel: stacked bar by inbound/outbound/organic/viral
+    - revenue_chart: new + renewal revenue stacked bar
+    - cash_collected_chart: cash collected line vs total costs line
+    - cost_breakdown_chart: stacked bar of marketing/sales/fulfillment/fixed/txn fees/refunds
+    - pnl_chart: gross profit, EBITDA, net income lines
+    - cash_balance_chart: cash balance with zero line
+    - fcf_chart: monthly FCF bars (green/red) + cumulative FCF line
+    - valuation_waterfall: PV FCF → terminal → debt → cash → equity
+    - scenario_comparison_chart: overlay two scenarios on same chart
+    - sensitivity_heatmap: 2D heatmap of equity value across two variable ranges
+
+ui/dashboard.py
+  - render_kpi_cards: 4 rows of metric cards
+  - render_valuation_panel: side-by-side DCF vs EBITDA with equity bridge
+  - render_sensitivity: pick two variables, compute 5×5 grid of equity values
+  - render_scenario_comparison: save Scenario A, modify sidebar → Scenario B, show deltas + overlay charts
+  - render_export: download inputs JSON, monthly CSV, summary report TXT; upload saved inputs
+
+
+HOW TO RUN
+----------
+  cd financial_modeling
+  python3 -m streamlit run app.py --server.headless true
+
+  Opens at http://localhost:8501
