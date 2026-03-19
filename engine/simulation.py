@@ -189,6 +189,23 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
         if d == 0:
             day_new += initial_custs
 
+        # TAM constraint: stop acquiring if market is full
+        if inp.total_addressable_market > 0 and d > 0:
+            headroom = inp.total_addressable_market - active[d - 1]
+            if headroom <= 0:
+                day_new = 0.0
+                new_cust_inbound[d] = 0.0
+                new_cust_outbound[d] = 0.0
+                new_cust_organic[d] = 0.0
+                new_cust_viral[d] = 0.0
+            elif day_new > headroom:
+                scale = headroom / day_new
+                day_new = headroom
+                new_cust_inbound[d] *= scale
+                new_cust_outbound[d] *= scale
+                new_cust_organic[d] *= scale
+                new_cust_viral[d] *= scale
+
         new_events[d] = day_new
 
         # Revenue from new sales (booked on the day of sale)
@@ -398,6 +415,29 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
         leads_outbound=leads_outbound_arr,
         leads_organic=leads_organic_arr,
     )
+
+
+def to_daily_df(result: SimulationResult) -> pd.DataFrame:
+    """Convert daily simulation arrays into a DataFrame with a 'day' column."""
+    T = len(result.days)
+    data = {"day": list(range(T))}
+
+    all_fields = [
+        "new_customers_total", "new_customers_inbound", "new_customers_outbound",
+        "new_customers_organic", "new_customers_viral",
+        "revenue_total", "revenue_new", "revenue_renewal",
+        "cash_collected_total", "cash_collected_new", "cash_collected_renewal",
+        "cost_marketing", "cost_sales", "cost_fulfillment", "cost_fixed",
+        "cost_transaction_fees", "cost_interest", "cost_refunds", "cost_total",
+        "gross_profit", "ebitda", "ebit", "net_income", "free_cash_flow",
+        "active_customers", "cumulative_customers", "cash_balance",
+        "cumulative_fcf", "churned_customers", "renewed_customers",
+    ]
+
+    for f in all_fields:
+        data[f] = getattr(result, f).tolist()
+
+    return pd.DataFrame(data)
 
 
 def to_monthly(result: SimulationResult) -> pd.DataFrame:

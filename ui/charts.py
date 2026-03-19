@@ -18,47 +18,125 @@ COLORS = {
     "gray": "#6B7280",
 }
 
-LAYOUT_DEFAULTS = dict(
+DAILY_LAYOUT = dict(
     template="plotly_white",
     height=380,
     margin=dict(l=40, r=20, t=40, b=40),
     font=dict(size=12),
     hovermode="x unified",
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    xaxis=dict(
+        rangeslider=dict(visible=True, thickness=0.06),
+        type="linear",
+    ),
 )
 
 
-def _month_axis(df: pd.DataFrame) -> list[str]:
-    return [f"M{m}" for m in df["month"]]
+def _apply_range(fig: go.Figure, total_days: int) -> go.Figure:
+    """Show the last 365 days by default, with range slider for full history."""
+    start = max(0, total_days - 365)
+    fig.update_xaxes(range=[start, total_days])
+    return fig
 
 
-def add_cursor(fig: go.Figure, month: int | None) -> go.Figure:
-    """Add a vertical line at the given month to show the KPI cursor position."""
-    if month is not None:
-        fig.add_vline(
-            x=f"M{month}", line_dash="dash", line_color="#9CA3AF",
-            annotation_text=f"M{month}", annotation_position="top",
+def add_cursor(fig: go.Figure, day: int | None) -> go.Figure:
+    if day is not None:
+        fig.add_shape(
+            type="line", x0=day, x1=day, y0=0, y1=1,
+            yref="paper", line=dict(dash="dash", color="#9CA3AF", width=1),
         )
     return fig
 
 
-def customers_chart(df: pd.DataFrame) -> go.Figure:
-    x = _month_axis(df)
-    fig = go.Figure()
+def hero_chart(df: pd.DataFrame, cursor_day: int | None = None) -> go.Figure:
+    from plotly.subplots import make_subplots
+
+    x = df["day"]
+    T = len(df)
+
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=("Free Cash Flow (Daily)", "Cash Balance", "Active Customers", "Revenue vs Costs"),
+        vertical_spacing=0.14,
+        horizontal_spacing=0.08,
+    )
+
+    # FCF line with fill
     fig.add_trace(go.Scatter(
-        x=x, y=df["active_customers"], name="Active Customers",
-        fill="tozeroy", line=dict(color=COLORS["primary"]),
-    ))
+        x=x, y=df["free_cash_flow"], fill="tozeroy",
+        line=dict(color=COLORS["green"], width=1),
+        showlegend=False, hovertemplate="FCF: $%{y:,.0f}<extra></extra>",
+    ), row=1, col=1)
+    fig.add_hline(y=0, line_dash="dash", line_color="#374151", line_width=1, row=1, col=1)
+
+    # Cash balance
     fig.add_trace(go.Scatter(
-        x=x, y=df["cumulative_customers"], name="Cumulative Customers",
-        line=dict(color=COLORS["gray"], dash="dot"),
-    ))
-    fig.update_layout(title="Customers", yaxis_title="Customers", **LAYOUT_DEFAULTS)
+        x=x, y=df["cash_balance"], fill="tozeroy",
+        line=dict(color=COLORS["primary"], width=1),
+        showlegend=False, hovertemplate="Cash: $%{y:,.0f}<extra></extra>",
+    ), row=1, col=2)
+    fig.add_hline(y=0, line_dash="dash", line_color="#374151", line_width=1, row=1, col=2)
+
+    # Active customers
+    fig.add_trace(go.Scatter(
+        x=x, y=df["active_customers"], fill="tozeroy",
+        line=dict(color=COLORS["sky"], width=1),
+        showlegend=False, hovertemplate="Active: %{y:,.0f}<extra></extra>",
+    ), row=2, col=1)
+
+    # Revenue vs costs
+    fig.add_trace(go.Scatter(
+        x=x, y=df["cash_collected_total"], name="Cash Collected",
+        line=dict(color=COLORS["green"], width=1),
+        hovertemplate="Revenue: $%{y:,.0f}<extra></extra>",
+    ), row=2, col=2)
+    fig.add_trace(go.Scatter(
+        x=x, y=df["cost_total"], name="Total Costs",
+        line=dict(color=COLORS["red"], width=1),
+        hovertemplate="Costs: $%{y:,.0f}<extra></extra>",
+    ), row=2, col=2)
+
+    # Cursor on all subplots
+    if cursor_day is not None:
+        xref_map = {(1, 1): "x", (1, 2): "x2", (2, 1): "x3", (2, 2): "x4"}
+        for (row, col), xref in xref_map.items():
+            fig.add_shape(
+                type="line", x0=cursor_day, x1=cursor_day, y0=0, y1=1,
+                xref=xref, yref="paper",
+                line=dict(dash="dash", color="#9CA3AF", width=1),
+            )
+
+    fig.update_layout(
+        template="plotly_white",
+        height=520,
+        margin=dict(l=40, r=20, t=36, b=30),
+        font=dict(size=11),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.08, xanchor="center", x=0.75),
+        showlegend=True,
+    )
+    fig.update_xaxes(title_text="Day")
+
     return fig
 
 
+def customers_chart(df: pd.DataFrame) -> go.Figure:
+    x = df["day"]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x, y=df["active_customers"], name="Active Customers",
+        fill="tozeroy", line=dict(color=COLORS["primary"], width=1),
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=df["cumulative_customers"], name="Cumulative Customers",
+        line=dict(color=COLORS["gray"], dash="dot", width=1),
+    ))
+    fig.update_layout(title="Customers", yaxis_title="Customers", xaxis_title="Day", **DAILY_LAYOUT)
+    return _apply_range(fig, len(df))
+
+
 def new_customers_by_channel(df: pd.DataFrame) -> go.Figure:
-    x = _month_axis(df)
+    x = df["day"]
     fig = go.Figure()
     channels = [
         ("new_customers_inbound", "Inbound", COLORS["sky"]),
@@ -68,47 +146,52 @@ def new_customers_by_channel(df: pd.DataFrame) -> go.Figure:
     ]
     for col, name, color in channels:
         if df[col].sum() > 0:
-            fig.add_trace(go.Bar(x=x, y=df[col], name=name, marker_color=color))
+            fig.add_trace(go.Scatter(x=x, y=df[col], name=name, line=dict(color=color, width=1)))
     fig.update_layout(
-        title="New Customers by Channel (Monthly)",
-        barmode="stack", yaxis_title="New Customers", **LAYOUT_DEFAULTS,
+        title="New Customers by Channel (Daily)", yaxis_title="New Customers",
+        xaxis_title="Day", **DAILY_LAYOUT,
     )
-    return fig
+    return _apply_range(fig, len(df))
 
 
 def revenue_chart(df: pd.DataFrame) -> go.Figure:
-    x = _month_axis(df)
+    x = df["day"]
     fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=x, y=df["revenue_new"], name="New Revenue", marker_color=COLORS["primary"],
+    fig.add_trace(go.Scatter(
+        x=x, y=df["revenue_new"], name="New Revenue",
+        line=dict(color=COLORS["primary"], width=1),
     ))
-    fig.add_trace(go.Bar(
-        x=x, y=df["revenue_renewal"], name="Renewal Revenue", marker_color=COLORS["green"],
+    fig.add_trace(go.Scatter(
+        x=x, y=df["revenue_renewal"], name="Renewal Revenue",
+        line=dict(color=COLORS["green"], width=1),
     ))
     fig.update_layout(
-        title="Revenue (Monthly)", barmode="stack",
-        yaxis_title="$", **LAYOUT_DEFAULTS,
+        title="Revenue (Daily)", yaxis_title="$",
+        xaxis_title="Day", **DAILY_LAYOUT,
     )
-    return fig
+    return _apply_range(fig, len(df))
 
 
 def cash_collected_chart(df: pd.DataFrame) -> go.Figure:
-    x = _month_axis(df)
+    x = df["day"]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=x, y=df["cash_collected_total"], name="Cash Collected",
-        fill="tozeroy", line=dict(color=COLORS["green"]),
+        fill="tozeroy", line=dict(color=COLORS["green"], width=1),
     ))
     fig.add_trace(go.Scatter(
         x=x, y=df["cost_total"], name="Total Costs",
-        line=dict(color=COLORS["red"]),
+        line=dict(color=COLORS["red"], width=1),
     ))
-    fig.update_layout(title="Cash Collected vs Costs (Monthly)", yaxis_title="$", **LAYOUT_DEFAULTS)
-    return fig
+    fig.update_layout(
+        title="Cash Collected vs Costs (Daily)", yaxis_title="$",
+        xaxis_title="Day", **DAILY_LAYOUT,
+    )
+    return _apply_range(fig, len(df))
 
 
 def cost_breakdown_chart(df: pd.DataFrame) -> go.Figure:
-    x = _month_axis(df)
+    x = df["day"]
     fig = go.Figure()
     costs = [
         ("cost_marketing", "Marketing", COLORS["sky"]),
@@ -119,62 +202,63 @@ def cost_breakdown_chart(df: pd.DataFrame) -> go.Figure:
         ("cost_refunds", "Refunds", COLORS["red"]),
     ]
     for col, name, color in costs:
-        fig.add_trace(go.Bar(x=x, y=df[col], name=name, marker_color=color))
+        fig.add_trace(go.Scatter(
+            x=x, y=df[col], name=name, stackgroup="costs",
+            line=dict(color=color, width=0),
+        ))
     fig.update_layout(
-        title="Cost Breakdown (Monthly)", barmode="stack",
-        yaxis_title="$", **LAYOUT_DEFAULTS,
+        title="Cost Breakdown (Daily, Stacked)", yaxis_title="$",
+        xaxis_title="Day", **DAILY_LAYOUT,
     )
-    return fig
+    return _apply_range(fig, len(df))
 
 
 def pnl_chart(df: pd.DataFrame) -> go.Figure:
-    x = _month_axis(df)
+    x = df["day"]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=x, y=df["gross_profit"], name="Gross Profit",
-        line=dict(color=COLORS["green"]),
+        line=dict(color=COLORS["green"], width=1),
     ))
     fig.add_trace(go.Scatter(
         x=x, y=df["ebitda"], name="EBITDA",
-        line=dict(color=COLORS["primary"]),
+        line=dict(color=COLORS["primary"], width=1),
     ))
     fig.add_trace(go.Scatter(
         x=x, y=df["net_income"], name="Net Income",
-        line=dict(color=COLORS["amber"]),
+        line=dict(color=COLORS["amber"], width=1),
     ))
     fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig.update_layout(title="P&L (Monthly)", yaxis_title="$", **LAYOUT_DEFAULTS)
-    return fig
+    fig.update_layout(title="P&L (Daily)", yaxis_title="$", xaxis_title="Day", **DAILY_LAYOUT)
+    return _apply_range(fig, len(df))
 
 
 def cash_balance_chart(df: pd.DataFrame) -> go.Figure:
-    x = _month_axis(df)
+    x = df["day"]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=x, y=df["cash_balance"], name="Cash Balance",
-        fill="tozeroy",
-        line=dict(color=COLORS["green"]),
+        fill="tozeroy", line=dict(color=COLORS["green"], width=1),
     ))
     fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig.update_layout(title="Cash Balance", yaxis_title="$", **LAYOUT_DEFAULTS)
-    return fig
+    fig.update_layout(title="Cash Balance", yaxis_title="$", xaxis_title="Day", **DAILY_LAYOUT)
+    return _apply_range(fig, len(df))
 
 
 def fcf_chart(df: pd.DataFrame) -> go.Figure:
-    x = _month_axis(df)
-    colors = [COLORS["green"] if v >= 0 else COLORS["red"] for v in df["free_cash_flow"]]
+    x = df["day"]
     fig = go.Figure()
-    fig.add_trace(go.Bar(
+    fig.add_trace(go.Scatter(
         x=x, y=df["free_cash_flow"], name="Free Cash Flow",
-        marker_color=colors,
+        fill="tozeroy", line=dict(color=COLORS["green"], width=1),
     ))
     fig.add_trace(go.Scatter(
         x=x, y=df["cumulative_fcf"], name="Cumulative FCF",
-        line=dict(color=COLORS["primary"], dash="dot"),
+        line=dict(color=COLORS["primary"], dash="dot", width=1),
     ))
     fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig.update_layout(title="Free Cash Flow (Monthly)", yaxis_title="$", **LAYOUT_DEFAULTS)
-    return fig
+    fig.update_layout(title="Free Cash Flow (Daily)", yaxis_title="$", xaxis_title="Day", **DAILY_LAYOUT)
+    return _apply_range(fig, len(df))
 
 
 def valuation_waterfall(
@@ -194,11 +278,8 @@ def valuation_waterfall(
         decreasing=dict(marker=dict(color=COLORS["red"])),
         totals=dict(marker=dict(color=COLORS["primary"])),
     ))
-    fig.update_layout(
-        title="DCF Equity Value Waterfall",
-        yaxis_title="$",
-        **LAYOUT_DEFAULTS,
-    )
+    layout = {k: v for k, v in DAILY_LAYOUT.items() if k != "xaxis"}
+    fig.update_layout(title="DCF Equity Value Waterfall", yaxis_title="$", **layout)
     return fig
 
 
@@ -211,20 +292,24 @@ def scenario_comparison_chart(
     label_b: str = "Scenario B",
     y_title: str = "$",
 ) -> go.Figure:
-    months = min(len(df_a), len(df_b))
-    x = [f"M{m}" for m in range(1, months + 1)]
+    if "day" in df_a.columns:
+        n = min(len(df_a), len(df_b))
+        x = df_a["day"].iloc[:n]
+    else:
+        n = min(len(df_a), len(df_b))
+        x = list(range(n))
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=x, y=df_a[column].iloc[:months], name=label_a,
+        x=x, y=df_a[column].iloc[:n], name=label_a,
         line=dict(color=COLORS["primary"], width=2),
     ))
     fig.add_trace(go.Scatter(
-        x=x, y=df_b[column].iloc[:months], name=label_b,
+        x=x, y=df_b[column].iloc[:n], name=label_b,
         line=dict(color=COLORS["amber"], width=2, dash="dash"),
     ))
     fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig.update_layout(title=title, yaxis_title=y_title, **LAYOUT_DEFAULTS)
-    return fig
+    fig.update_layout(title=title, yaxis_title=y_title, xaxis_title="Day", **DAILY_LAYOUT)
+    return _apply_range(fig, n)
 
 
 def sensitivity_heatmap(
@@ -244,10 +329,9 @@ def sensitivity_heatmap(
         texttemplate="%{text}",
         hovertemplate=f"{row_label}: %{{y}}<br>{col_label}: %{{x}}<br>Equity: %{{text}}<extra></extra>",
     ))
+    layout = {k: v for k, v in DAILY_LAYOUT.items() if k != "xaxis"}
     fig.update_layout(
-        title=title,
-        xaxis_title=col_label,
-        yaxis_title=row_label,
-        **{**LAYOUT_DEFAULTS, "height": 420},
+        title=title, xaxis_title=col_label, yaxis_title=row_label,
+        **{**layout, "height": 420},
     )
     return fig

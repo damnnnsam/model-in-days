@@ -7,7 +7,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from engine.simulation import run_simulation, to_monthly
+from engine.simulation import run_simulation, to_monthly, to_daily_df
 from engine.valuation import compute_valuation
 from engine.metrics import compute_kpis
 from ui.sidebar import render_sidebar
@@ -26,37 +26,60 @@ from ui.charts import (
     fcf_chart,
     valuation_waterfall,
     add_cursor,
+    hero_chart,
 )
 
 st.title("Marketing Metrics → Equity Value")
-st.caption(
-    "Full-stack financial model: granular marketing inputs → revenue → P&L → FCF → DCF / EBITDA valuation"
-)
 
 inp = render_sidebar()
 
+import json, os
+with open(os.path.join(os.path.dirname(__file__), "current_model.json"), "w") as _f:
+    json.dump(inp.__dict__, _f, indent=2, default=str)
+
 sim = run_simulation(inp)
+daily = to_daily_df(sim)
 monthly = to_monthly(sim)
 val = compute_valuation(inp, sim)
 
 # ── Time cursor ─────────────────────────────────────────────────────
-total_months = inp.time_max // 30
+total_days = inp.time_max
 col_slider, col_label = st.columns([5, 1])
 with col_slider:
-    view_month = st.slider(
-        "View metrics at month",
-        min_value=1, max_value=total_months, value=total_months,
+    cursor_day = st.slider(
+        "View metrics at day",
+        min_value=1, max_value=total_days, value=total_days,
         key="time_cursor",
     )
 with col_label:
-    years = view_month / 12
+    years = cursor_day / 365
     st.markdown(f"**≈ {years:.1f} years**")
 
-cursor_day = view_month * 30
 kpis = compute_kpis(inp, sim, at_day=cursor_day)
 
-# ── KPI Dashboard ───────────────────────────────────────────────────
-render_kpi_cards(kpis)
+# ── Hero chart ──────────────────────────────────────────────────────
+st.plotly_chart(hero_chart(daily, cursor_day=cursor_day), use_container_width=True)
+
+# ── KPI strip ───────────────────────────────────────────────────────
+def _fd(v):
+    if abs(v) >= 1_000_000: return f"${v/1_000_000:,.1f}M"
+    if abs(v) >= 1_000: return f"${v/1_000:,.1f}K"
+    return f"${v:,.0f}"
+
+ttp = f"{kpis.time_to_profitability_months} mo" if kpis.time_to_profitability_months > 0 else "Never"
+k1, k2, k3, k4, k5, k6, k7, k8 = st.columns(8)
+k1.metric("Active Cust.", f"{kpis.active_customers:,.0f}")
+k2.metric("Monthly Rev.", _fd(kpis.monthly_revenue))
+k3.metric("Monthly FCF", _fd(kpis.monthly_fcf))
+k4.metric("TTP", ttp)
+k5.metric("CAC", _fd(kpis.cac_blended))
+k6.metric("LTV / CAC", f"{kpis.ltv_cac_ratio:.1f}x")
+k7.metric("Profit/Cust/Mo", _fd(kpis.profit_per_customer_per_month))
+k8.metric("Cash Needed", _fd(kpis.cash_needed))
+
+with st.expander("All Metrics"):
+    render_kpi_cards(kpis)
+
 st.divider()
 
 # ── Tabs for different views ────────────────────────────────────────
@@ -80,23 +103,23 @@ with tab_val:
     )
 
 with tab_cust:
-    st.plotly_chart(add_cursor(customers_chart(monthly), view_month), use_container_width=True)
-    st.plotly_chart(add_cursor(new_customers_by_channel(monthly), view_month), use_container_width=True)
+    st.plotly_chart(add_cursor(customers_chart(daily), cursor_day), use_container_width=True)
+    st.plotly_chart(add_cursor(new_customers_by_channel(daily), cursor_day), use_container_width=True)
 
 with tab_rev:
-    st.plotly_chart(add_cursor(revenue_chart(monthly), view_month), use_container_width=True)
-    st.plotly_chart(add_cursor(cash_collected_chart(monthly), view_month), use_container_width=True)
+    st.plotly_chart(add_cursor(revenue_chart(daily), cursor_day), use_container_width=True)
+    st.plotly_chart(add_cursor(cash_collected_chart(daily), cursor_day), use_container_width=True)
 
 with tab_costs:
-    st.plotly_chart(add_cursor(cost_breakdown_chart(monthly), view_month), use_container_width=True)
+    st.plotly_chart(add_cursor(cost_breakdown_chart(daily), cursor_day), use_container_width=True)
 
 with tab_pnl:
     col1, col2 = st.columns(2)
     with col1:
-        st.plotly_chart(add_cursor(pnl_chart(monthly), view_month), use_container_width=True)
+        st.plotly_chart(add_cursor(pnl_chart(daily), cursor_day), use_container_width=True)
     with col2:
-        st.plotly_chart(add_cursor(fcf_chart(monthly), view_month), use_container_width=True)
-    st.plotly_chart(add_cursor(cash_balance_chart(monthly), view_month), use_container_width=True)
+        st.plotly_chart(add_cursor(fcf_chart(daily), cursor_day), use_container_width=True)
+    st.plotly_chart(add_cursor(cash_balance_chart(daily), cursor_day), use_container_width=True)
 
 with tab_sens:
     render_sensitivity(inp)

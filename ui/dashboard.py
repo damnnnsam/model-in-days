@@ -8,7 +8,7 @@ import pandas as pd
 from engine.inputs import ModelInputs
 from engine.metrics import KPIMetrics, compute_kpis
 from engine.valuation import ValuationResult
-from engine.simulation import SimulationResult, run_simulation, to_monthly
+from engine.simulation import SimulationResult, run_simulation, to_monthly, to_daily_df
 from engine.valuation import compute_valuation
 
 
@@ -169,12 +169,12 @@ def render_scenario_comparison(inp_a: ModelInputs) -> None:
 
     # Run both
     sim_a = run_simulation(inp_saved)
-    monthly_a = to_monthly(sim_a)
+    daily_a = to_daily_df(sim_a)
     kpis_a = compute_kpis(inp_saved, sim_a)
     val_a = compute_valuation(inp_saved, sim_a)
 
     sim_b = run_simulation(inp_b)
-    monthly_b = to_monthly(sim_b)
+    daily_b = to_daily_df(sim_b)
     kpis_b = compute_kpis(inp_b, sim_b)
     val_b = compute_valuation(inp_b, sim_b)
 
@@ -247,7 +247,7 @@ def render_scenario_comparison(inp_a: ModelInputs) -> None:
     ]
     for col_name, title, y_title in chart_options:
         fig = scenario_comparison_chart(
-            monthly_a, monthly_b, col_name, title,
+            daily_a, daily_b, col_name, title,
             label_a="Scenario A", label_b="Scenario B (Current)",
             y_title=y_title,
         )
