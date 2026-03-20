@@ -186,8 +186,33 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
                 new_cust_viral[d] = viral_customers_today
 
         day_new = new_cust_inbound[d] + new_cust_outbound[d] + new_cust_organic[d] + new_cust_viral[d]
-        if d == 0:
-            day_new += initial_custs
+
+        # Initial customers enter on day 0 as RETAINED customers (renewal economics)
+        if d == 0 and initial_custs > 0:
+            # Revenue at renewal price, not new price
+            revenue_renewal[0] += initial_custs * p_ren * RR
+
+            # Cash collection at renewal timing
+            if t_c_ren > 0:
+                daily_cash_init = (initial_custs * p_ren * RR) / t_c_ren
+                end_init = min(t_c_ren, T)
+                cash_collected_renewal[0:end_init] += daily_cash_init
+            else:
+                cash_collected_renewal[0] += initial_custs * p_ren * RR
+
+            # Renewal fulfillment costs (not new customer fulfillment)
+            if contract_len > 0:
+                daily_fulfill_init = (initial_custs * p_ren * c_f_ren) / contract_len
+                end_init = min(contract_len, T)
+                cost_fulfill_renewal[0:end_init] += daily_fulfill_init
+
+            # No sales commission — they're already closed
+            # Schedule their next renewal
+            if contract_len < T and churn < 1.0:
+                renewal_events[contract_len] += initial_custs * (1.0 - churn) * (1.0 - refund_r)
+
+            # Add to active tracking (not to new_events — they're not new acquisitions)
+            active[0] = initial_custs
 
         # TAM constraint: stop acquiring if market is full
         if inp.total_addressable_market > 0 and d > 0:
@@ -277,11 +302,8 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
         # Compute active customers
         cumulative_new[d] = np.sum(new_events[:d + 1])
         total_refunded = np.sum(refunded_cum[:d + 1])
-        # Active = cumulative new - churned - refunded
-        # Churned is implicit: cumulative new - renewed - still_in_first_contract - refunded
-        # Simpler: track active directly
         if d == 0:
-            active[d] = day_new
+            active[d] = initial_custs + day_new
         else:
             # Active = previous active + today's new - today's churn losses + today's renewals that keep them
             # At renewal boundaries, the renewal_events already represent who stays
