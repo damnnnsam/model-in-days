@@ -1,7 +1,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="Financial Model — Marketing to Equity Value",
+    page_title="Model In Days",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -29,7 +29,8 @@ from ui.charts import (
     hero_chart,
 )
 
-st.title("Marketing Metrics → Equity Value")
+st.title("Model In Days")
+st.caption("Use this model to find the most profitable direction for your business and to understand what metrics really matter.")
 
 inp = render_sidebar()
 
