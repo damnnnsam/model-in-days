@@ -127,15 +127,19 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = N
     monthly_new = float(np.sum(sim.new_customers_total[start:end]))
 
     # ── Time to profitability (simulation-wide, not cursor-scoped) ──
+    # Find the last day cumulative FCF is negative. The day after that
+    # is when the business is sustainably profitable (stays positive).
     T_full = len(sim.days)
-    ttp_days = T_full
-    if sim.cumulative_fcf[0] >= 0:
+    last_negative_day = -1
+    for d in range(T_full):
+        if sim.cumulative_fcf[d] < 0:
+            last_negative_day = d
+    if last_negative_day == -1:
         ttp_days = 0
+    elif last_negative_day < T_full - 1:
+        ttp_days = last_negative_day + 1
     else:
-        for d in range(1, T_full):
-            if sim.cumulative_fcf[d] >= 0 and sim.cumulative_fcf[d - 1] < 0:
-                ttp_days = d
-                break
+        ttp_days = T_full
     ttp_months = max(1, round(ttp_days / 30)) if ttp_days < T_full else -1
 
     # ── Cash consumption (simulation-wide) ────────────────────────
