@@ -8,27 +8,32 @@ from engine.simulation import SimulationResult
 from engine.inputs import ModelInputs
 
 COLORS = {
-    "primary": "#4F46E5",
-    "green": "#10B981",
-    "red": "#EF4444",
-    "amber": "#F59E0B",
-    "sky": "#0EA5E9",
-    "purple": "#8B5CF6",
-    "pink": "#EC4899",
-    "gray": "#6B7280",
+    "primary": "#a0a0a0",
+    "green": "#4ade80",
+    "red": "#f87171",
+    "amber": "#fbbf24",
+    "sky": "#60a5fa",
+    "purple": "#a78bfa",
+    "pink": "#f472b6",
+    "gray": "#525252",
 }
 
 DAILY_LAYOUT = dict(
-    template="plotly_white",
-    height=380,
-    margin=dict(l=40, r=20, t=40, b=40),
-    font=dict(size=12),
+    template="plotly_dark",
+    height=360,
+    margin=dict(l=50, r=16, t=32, b=36),
+    font=dict(family="JetBrains Mono, Consolas, monospace", size=11, color="#b0b0b0"),
     hovermode="x unified",
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                font=dict(size=10)),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(10,10,10,1)",
     xaxis=dict(
-        rangeslider=dict(visible=True, thickness=0.06),
+        rangeslider=dict(visible=True, thickness=0.05),
         type="linear",
+        gridcolor="#1a1a1a",
     ),
+    yaxis=dict(gridcolor="#1a1a1a"),
 )
 
 
@@ -57,8 +62,8 @@ def hero_chart(df: pd.DataFrame, cursor_day: int | None = None) -> go.Figure:
     fig = make_subplots(
         rows=2, cols=2,
         subplot_titles=("Free Cash Flow (Daily)", "Cash Balance", "Active Customers", "Revenue vs Costs"),
-        vertical_spacing=0.14,
-        horizontal_spacing=0.08,
+        vertical_spacing=0.22,
+        horizontal_spacing=0.12,
     )
 
     # FCF line with fill
@@ -67,15 +72,16 @@ def hero_chart(df: pd.DataFrame, cursor_day: int | None = None) -> go.Figure:
         line=dict(color=COLORS["green"], width=1),
         showlegend=False, hovertemplate="FCF: $%{y:,.0f}<extra></extra>",
     ), row=1, col=1)
-    fig.add_hline(y=0, line_dash="dash", line_color="#374151", line_width=1, row=1, col=1)
+    fig.add_hline(y=0, line_dash="dash", line_color="#333", line_width=1, row=1, col=1)
 
     # Cash balance
     fig.add_trace(go.Scatter(
         x=x, y=df["cash_balance"], fill="tozeroy",
-        line=dict(color=COLORS["primary"], width=1),
+        line=dict(color=COLORS["sky"], width=1),
+        fillcolor="rgba(96,165,250,0.15)",
         showlegend=False, hovertemplate="Cash: $%{y:,.0f}<extra></extra>",
     ), row=1, col=2)
-    fig.add_hline(y=0, line_dash="dash", line_color="#374151", line_width=1, row=1, col=2)
+    fig.add_hline(y=0, line_dash="dash", line_color="#333", line_width=1, row=1, col=2)
 
     # Active customers
     fig.add_trace(go.Scatter(
@@ -107,15 +113,19 @@ def hero_chart(df: pd.DataFrame, cursor_day: int | None = None) -> go.Figure:
             )
 
     fig.update_layout(
-        template="plotly_white",
-        height=520,
-        margin=dict(l=40, r=20, t=36, b=30),
-        font=dict(size=11),
+        template="plotly_dark",
+        height=560,
+        margin=dict(l=50, r=16, t=28, b=28),
+        font=dict(family="JetBrains Mono, Consolas, monospace", size=10, color="#b0b0b0"),
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=-0.08, xanchor="center", x=0.75),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.08, xanchor="center", x=0.75,
+                    font=dict(size=10)),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(10,10,10,1)",
         showlegend=True,
     )
-    fig.update_xaxes(title_text="Day")
+    fig.update_xaxes(title_text="Day", gridcolor="#1a1a1a")
+    fig.update_yaxes(gridcolor="#1a1a1a")
 
     return fig
 

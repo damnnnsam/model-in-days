@@ -34,10 +34,13 @@ class KPIMetrics:
     # Nick Kozmin metrics
     time_to_profitability_days: int
     time_to_profitability_months: int
-    cash_consumption: float  # max cash deficit (how much funding you need)
+    cash_consumption: float
     profit_per_customer_per_month: float
-    k_value: float  # viral coefficient
-    cash_needed: float  # additional cash needed beyond starting cash
+    k_value: float
+    cash_needed: float
+    cash_conversion_cycle: int  # days from first contact to cash collected
+    time_to_self_fund_days: int  # day cash balance goes positive
+    time_to_self_fund_months: int
 
 
 def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = None) -> KPIMetrics:
@@ -154,6 +157,28 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = N
     else:
         k_value = 0.0
 
+    # ── Cash conversion cycle ────────────────────────────────────────
+    ttm = 0
+    if inp.use_outbound:
+        ttm = inp.time_to_market_outbound
+    elif inp.use_inbound:
+        ttm = inp.time_to_market_inbound
+    elif inp.use_organic:
+        ttm = inp.time_to_market_organic
+    ccc = ttm + inp.time_to_sell + inp.time_to_collect
+
+    # ── Time to self-fund ────────────────────────────────────────────
+    # First day cash balance crosses from negative to positive
+    ttsf_days = T_full
+    if sim.cash_balance[0] >= 0:
+        ttsf_days = 0
+    else:
+        for d in range(1, T_full):
+            if sim.cash_balance[d] >= 0 and sim.cash_balance[d - 1] < 0:
+                ttsf_days = d
+                break
+    ttsf_months = max(1, round(ttsf_days / 30)) if ttsf_days < T_full else -1
+
     return KPIMetrics(
         cac_blended=cac_blended,
         cac_inbound=cac_inbound,
@@ -176,4 +201,7 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = N
         profit_per_customer_per_month=profit_per_cust_month,
         k_value=k_value,
         cash_needed=cash_needed,
+        cash_conversion_cycle=ccc,
+        time_to_self_fund_days=ttsf_days,
+        time_to_self_fund_months=ttsf_months,
     )

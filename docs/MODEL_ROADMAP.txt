@@ -1,0 +1,328 @@
+MODEL IN DAYS — PRODUCT ROADMAP
+=================================
+
+Four models. Each builds on the engine of the one before it.
+Same simulation core, different lenses on the same business physics.
+
+
+================================================================================
+MODEL 1: LINEAR (current — shipped)
+================================================================================
+
+What it is:
+  Single offer, constant-rate channels, day-by-day simulation from
+  marketing metrics through to DCF equity value.
+
+Who uses it:
+  - Operators understanding their own business
+  - Consultants diagnosing a prospect in the first meeting
+  - Anyone learning how marketing metrics connect to valuation
+
+What it does:
+  - Inputs: channel config (outbound/inbound/organic/viral), product
+    (price, fulfillment, collection timing), renewals/churn, costs, 
+    valuation params
+  - Simulation: daily loop computing customers, revenue, cash, costs, P&L
+  - Outputs: KPIs (CAC, LTV, TTP, TTSF, CCC, margins), charts (FCF,
+    cash balance, customers, revenue vs costs), DCF/EBITDA valuation,
+    sensitivity analysis, GTM Alpha stress testing
+  - Full calculation audit trail at any point in time
+
+What's built:
+  - Day-by-day simulation engine (2500 days)
+  - TAM constraint (stops acquisition when market full)
+  - Initial customers enter as retained (renewal economics)
+  - Time cursor with full logic trace
+  - Scenario comparison (A/B with delta)
+  - GTM Alpha tab (stress-test single metrics)
+  - URL-based model sharing
+  - Monospace dark UI
+
+Limitations:
+  - All rates are constant (no saturation, no decay, no compounding)
+  - Single channel at constant output forever
+  - No events, no phasing, no channel sequencing
+  - TAM is a hard cap, not a depletion curve
+
+
+================================================================================
+MODEL 2: GROWTH OPERATOR DEAL
+================================================================================
+
+What it is:
+  Two-sided model showing the client's P&L and the growth operator's P&L
+  from the same engagement. Answers: "What deal structure makes both
+  sides profitable?"
+
+Who uses it:
+  - Growth consultants selling engagements
+  - Agencies pricing their services
+  - Clients evaluating whether to hire an operator
+  - Both sides negotiating terms
+
+How it works:
+  Run Model 1 twice — once with current metrics (before operator),
+  once with improved metrics (after operator). The delta between the
+  two is the value created. A deal structure defines how that delta
+  splits.
+
+  Before: client's current reply rate, close rate, churn, etc.
+  After:  operator's projected improvements to those metrics
+  Delta:  the difference in revenue, FCF, and equity value
+
+Deal structure inputs:
+  - Revenue share (% of new revenue or total revenue)
+  - Fixed monthly retainer
+  - Performance bonus (triggered at milestones)
+  - Equity component (% of equity value created)
+  - Duration of engagement
+  - Ramp period (operator takes X months to produce results)
+
+Outputs — Client View:
+  - Revenue before vs after
+  - FCF before vs after
+  - Equity value before vs after
+  - Net gain after paying the operator
+  - ROI on operator cost
+  - Break-even month (when gains exceed operator fees)
+
+Outputs — Operator View:
+  - Monthly earnings (retainer + rev share + bonuses)
+  - Total engagement value
+  - Effective hourly rate
+  - Portfolio modeling (if running N clients simultaneously)
+
+Outputs — Deal Finder:
+  - Given a target ROI for the client and a target income for the
+    operator, what rev share % makes both sides profitable?
+  - Sensitivity: how does the deal economics change if the operator
+    only achieves 50% / 75% / 100% / 125% of projected improvements?
+
+Key insight:
+  The model shows that even at 20% rev share, if the operator moves
+  reply rate from 0.15% to 0.5%, the client keeps 80% of millions
+  in equity value creation. The operator's fee is tiny relative to
+  the value created. This is the consulting sales pitch, quantified.
+
+
+================================================================================
+MODEL 3: REVENUE EVENTS OVER TIME (Live Valuation)
+================================================================================
+
+What it is:
+  A timeline of campaigns, channel activations, and business events
+  that play out over time. The model runs the full simulation with
+  these events layered in, producing a live valuation curve that shows
+  how enterprise value evolves as the business executes its plan.
+
+Who uses it:
+  - Operators planning their GTM roadmap
+  - Investors evaluating a growth plan
+  - Anyone asking "what happens to valuation when we launch X on day Y?"
+
+How it works:
+  Instead of constant-rate channels, the user defines a sequence of
+  events on a timeline. Each event modifies the simulation state at
+  a specific day:
+
+  Event types:
+  
+  1. CHANNEL ACTIVATION
+     "Start outbound on day 0 with 1 SDR"
+     "Launch paid ads on day 90 with $10K/month"
+     "Begin content publishing on day 180"
+     "Activate referral program on day 270"
+  
+  2. CHANNEL SCALING
+     "Add 2nd SDR on day 120"
+     "Increase ad spend to $25K on day 180"
+     "Hire content writer on day 200"
+  
+  3. METRIC SHIFT
+     "Reply rate improves from 0.15% to 0.35% on day 60 (new angles)"
+     "Churn drops from 10% to 7% on day 180 (product improvement)"
+     "Close rate improves from 4% to 6% on day 90 (sales training)"
+     "CPM drops from $55 to $35 on day 150 (new market)"
+  
+  4. CAMPAIGN EVENT
+     "YouTube video published day 200, generates 50K views over 30 days"
+     "PR feature on day 300, 100K impressions with 0.5% CTR"
+     "Product Hunt launch day 150, 5K signups over 3 days"
+     "Conference attendance day 400, 200 qualified leads over 5 days"
+  
+  5. BUSINESS EVENT
+     "Hire COO on day 180, fixed costs +$8K/month"
+     "Move office on day 365, fixed costs +$5K/month"
+     "Raise $500K on day 200, cash_in_bank += $500K"
+     "Price increase from $10K to $12K on day 300"
+
+  Each event has:
+  - trigger_day: when it activates
+  - parameter: which input it modifies
+  - value: what it changes to (or delta)
+  - duration: how long the effect lasts (permanent or temporary)
+  - decay: does the effect fade? (e.g., viral content decays)
+
+Simulation:
+  The daily loop checks for events at each day. When an event triggers,
+  it modifies the relevant input parameters for that day forward.
+  Multiple events can stack — outbound starts day 0, paid starts day 90,
+  content starts day 180, reply rate improves day 60, etc.
+
+  This turns the simulation from a static projection into a
+  PLAN EXECUTION MODEL. You're not asking "what if my rates are X?"
+  You're asking "what happens when I execute this specific sequence
+  of actions?"
+
+Outputs:
+  - Live valuation curve: enterprise value at every day, showing how
+    each event shifts the trajectory
+  - Event impact attribution: "the paid ads launch on day 90 added
+    $2.3M to EV by day 365"
+  - Channel mix evolution chart: shows how the blend shifts over time
+    (outbound dominant early → paid + content later → organic dominant
+    at maturity)
+  - Revenue quality curve: as channel mix shifts toward owned attention,
+    revenue quality score improves
+  - Plan vs baseline: compare the event-driven plan against a
+    constant-rate baseline to see the value of the GTM roadmap
+
+UI:
+  - Timeline editor: visual timeline where you drag events onto a
+    track (like a video editor or Gantt chart)
+  - Or simpler: a table of events (day, type, parameter, value)
+    that you can add/remove/reorder
+  - The simulation reruns on every edit, showing the valuation curve
+    update in real time
+
+Key insight:
+  Two businesses with the same inputs TODAY can have radically different
+  valuations based on their PLANS. A business that plans to activate
+  content on day 180 and referrals on day 365 is worth more than one
+  that plans to stay on outbound forever, even if they look identical
+  right now. This model captures that.
+
+
+================================================================================
+MODEL 4: CHANNEL DYNAMICS (the valuation engine)
+================================================================================
+
+What it is:
+  Full channel-specific modeling with different physics per channel.
+  Each channel has its own archetype (depletion, auction, asset,
+  network, capacity) with saturation, decay, compounding, and
+  interaction effects.
+
+Who uses it:
+  - Investors valuing internet businesses
+  - Acquirers underwriting targets
+  - Operators at scale optimizing channel allocation
+  - Anyone asking "what is this business really worth given its
+    attention engine composition?"
+
+Channel archetypes:
+
+  DEPLETION (Outbound / Cold Email):
+  - Finite TAM with pool depletion
+  - Recontact cycles with declining conversion
+  - Infrastructure constraints (inboxes, domains, sending limits)
+  - Deliverability as a state variable
+  - List quality degradation (best prospects contacted first)
+
+  AUCTION (Paid Ads):
+  - Marginal CPA curve (CPA rises with spend)
+  - Creative fatigue (CTR decays per creative)
+  - Learning phase delays
+  - Audience saturation
+  - Efficient frontier detection
+
+  ASSET (Content / SEO / YouTube):
+  - Publishing cadence
+  - Per-asset lifecycle (ramp → peak → long tail)
+  - Portfolio compounding (authority effects)
+  - Non-linear inflection dynamics
+  - Permanent baseline lift from viral events
+
+  NETWORK (Referrals / WOM):
+  - Emergence threshold (needs installed base)
+  - Satisfaction dependency
+  - Network saturation
+  - Trust-based conversion lift
+  - Referred customer quality premium
+
+  CAPACITY (Enterprise Sales):
+  - Headcount with ramp periods
+  - Quota capacity per ramped rep
+  - Management span
+  - Hiring and attrition lag
+
+Channel interactions:
+  - Content authority improves paid conversion
+  - Brand awareness improves outbound response rates
+  - Referrals only emerge from satisfied customers (retention feeds virality)
+  - Channel mix affects blended CAC and reinvestment capacity
+
+Cohort-level tracking:
+  - Customers tagged by acquisition channel
+  - Channel-specific retention curves
+  - Revenue quality scoring by source
+  - LTV varies by channel
+
+Valuation:
+  - Value attribution by channel: "35% of EV comes from content,
+    32% from outbound, 20% from paid, 13% from referrals"
+  - Terminal value reflects steady-state channel composition
+  - Discount rate adjusted by channel durability
+  - Revenue quality weighted DCF
+
+Key insight:
+  A dollar of organic-content-acquired revenue is worth more than a
+  dollar of paid-ads-acquired revenue because the customer retains
+  better, the acquisition cost doesn't recur, and the content asset
+  continues producing attention for free. This model quantifies that
+  difference and expresses it in enterprise value.
+
+
+================================================================================
+BUILD SEQUENCE
+================================================================================
+
+Model 1: DONE (current state)
+  Linear, constant-rate, single offer
+
+Model 2: NEXT
+  Growth operator deal structure
+  Estimated effort: moderate — runs Model 1 twice with deal overlay
+  Highest immediate commercial value (selling consulting)
+
+Model 3: AFTER MODEL 2
+  Revenue events over time / live valuation
+  Estimated effort: moderate — event system on top of Model 1
+  Transforms the model from static projection to plan execution
+
+Model 4: LAST
+  Channel dynamics with archetypes
+  Estimated effort: significant — new channel engine architecture
+  The intellectual core, but requires the most engineering
+
+Each model shares the same simulation engine, valuation layer, and UI
+framework. The differences are in how inputs are structured and how
+channels behave over time.
+
+
+================================================================================
+THE THESIS
+================================================================================
+
+The future of business valuation for internet companies is not:
+  "What multiple should we slap on revenue?"
+
+It is:
+  "What attention engines does this business own, how durable are they,
+  how efficient is the conversion, and what happens to the cost of
+  attention over time?"
+
+Model 1 teaches the basics.
+Model 2 makes it commercially useful.
+Model 3 makes it dynamic and plannable.
+Model 4 makes it true.

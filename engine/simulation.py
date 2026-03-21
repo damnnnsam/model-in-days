@@ -200,11 +200,16 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
             else:
                 cash_collected_renewal[0] += initial_custs * p_ren * RR
 
-            # Renewal fulfillment costs (not new customer fulfillment)
+            # Renewal fulfillment costs (spread over contract, not lumped)
             if contract_len > 0:
                 daily_fulfill_init = (initial_custs * p_ren * c_f_ren) / contract_len
                 end_init = min(contract_len, T)
                 cost_fulfill_renewal[0:end_init] += daily_fulfill_init
+
+            # Transaction fees on initial customer renewal cash
+            if t_c_ren > 0:
+                end_txn = min(t_c_ren, T)
+                cost_transaction[0:end_txn] += daily_cash_init * TF
 
             # No sales commission — they're already closed
             # Schedule their next renewal
@@ -255,8 +260,8 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
         else:
             cost_fulfill_new[d] += day_new * P * c_f
 
-        # Transaction fees on cash collected
-        cost_transaction[d] += cash_collected_new[d] * TF
+        # Transaction fees on all cash collected today (new + renewal)
+        cost_transaction[d] += (cash_collected_new[d] + cash_collected_renewal[d]) * TF
 
         # Refunds: customers acquired on day d may refund after refund_period
         refund_day = d + inp.refund_period
@@ -276,19 +281,30 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
             ren_count = renewal_events[d]
             renewed_cum[d] += ren_count
 
-            revenue_renewal[d] += ren_count * p_ren * RR
-            cost_sales_renewal[d] += ren_count * p_ren * c_s_ren
-            cost_fulfill_renewal[d] += ren_count * p_ren * c_f_ren
-
-            # Cash collection for renewals
+            # Revenue spread over collection period (matches cash timing)
             if t_c_ren > 0:
-                daily_cash_ren = (ren_count * p_ren * RR) / t_c_ren
+                daily_rev_ren = (ren_count * p_ren * RR) / t_c_ren
                 end_ren = min(d + t_c_ren, T)
-                cash_collected_renewal[d:end_ren] += daily_cash_ren
+                revenue_renewal[d:end_ren] += daily_rev_ren
+                cash_collected_renewal[d:end_ren] += daily_rev_ren
             else:
+                revenue_renewal[d] += ren_count * p_ren * RR
                 cash_collected_renewal[d] += ren_count * p_ren * RR
 
-            cost_transaction[d] += cash_collected_renewal[d] * TF
+            # Sales commission spread over collection period
+            if t_c_ren > 0:
+                daily_sales_ren = (ren_count * p_ren * c_s_ren) / t_c_ren
+                cost_sales_renewal[d:end_ren] += daily_sales_ren
+            else:
+                cost_sales_renewal[d] += ren_count * p_ren * c_s_ren
+
+            # Fulfillment spread over contract
+            if contract_len > 0:
+                daily_ren_fulfill = (ren_count * p_ren * c_f_ren) / contract_len
+                end_ful = min(d + contract_len, T)
+                cost_fulfill_renewal[d:end_ful] += daily_ren_fulfill
+            else:
+                cost_fulfill_renewal[d] += ren_count * p_ren * c_f_ren
 
             # Schedule next renewal (renewal of renewals)
             next_renewal = d + contract_len

@@ -29,30 +29,39 @@ def _fmt_number(v: float) -> str:
 
 
 def render_kpi_cards(kpis: KPIMetrics) -> None:
-    c1, c2, c3, c4 = st.columns(4)
+    ttp_label = f"{kpis.time_to_profitability_days} days" if kpis.time_to_profitability_days < len(kpis.__class__.__mro__) * 99999 and kpis.time_to_profitability_months > 0 else "Never"
+    if kpis.time_to_profitability_months > 0:
+        ttp_label = f"{kpis.time_to_profitability_days} days"
+    else:
+        ttp_label = "Never"
+
+    ttsf_label = f"{kpis.time_to_self_fund_days} days" if kpis.time_to_self_fund_months > 0 else "Never"
+
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Active Customers", _fmt_number(kpis.active_customers))
     c2.metric("Monthly Revenue", _fmt_dollar(kpis.monthly_revenue))
     c3.metric("Monthly FCF", _fmt_dollar(kpis.monthly_fcf))
-    ttp_label = f"{kpis.time_to_profitability_months} months" if kpis.time_to_profitability_months > 0 else "Never"
-    c4.metric("Time to Profitability", ttp_label)
+    c4.metric("Monthly New Customers", _fmt_number(kpis.monthly_new_customers))
+    c5.metric("Total Customers (All Time)", _fmt_number(kpis.total_customers))
 
-    c5, c6, c7, c8 = st.columns(4)
-    c5.metric("CAC (Blended)", _fmt_dollar(kpis.cac_blended))
-    c6.metric("LTV", _fmt_dollar(kpis.ltv))
-    c7.metric("LTV / CAC", f"{kpis.ltv_cac_ratio:.1f}x")
-    c8.metric("Payback Period", f"{kpis.payback_period_days:.0f} days")
+    c6, c7, c8, c9, c10 = st.columns(5)
+    c6.metric("CAC (Blended)", _fmt_dollar(kpis.cac_blended))
+    c7.metric("LTV", _fmt_dollar(kpis.ltv))
+    c8.metric("LTV / CAC", f"{kpis.ltv_cac_ratio:.1f}x")
+    c9.metric("Payback Period", f"{kpis.payback_period_days:.0f} days")
+    c10.metric("Profit / Customer / Month", _fmt_dollar(kpis.profit_per_customer_per_month))
 
-    c9, c10, c11, c12 = st.columns(4)
-    c9.metric("Profit / Customer / Month", _fmt_dollar(kpis.profit_per_customer_per_month))
-    c10.metric("Cash Needed", _fmt_dollar(kpis.cash_needed))
-    c11.metric("Gross Margin", f"{kpis.gross_margin:.1f}%")
-    c12.metric("EBITDA Margin", f"{kpis.ebitda_margin:.1f}%")
+    c11, c12, c13, c14, c15 = st.columns(5)
+    c11.metric("Time to Profitability", ttp_label)
+    c12.metric("Time to Self-Fund", ttsf_label)
+    c13.metric("Cash Needed", _fmt_dollar(kpis.cash_needed))
+    c14.metric("Cash Conversion Cycle", f"{kpis.cash_conversion_cycle} days")
+    c15.metric("Gross Margin", f"{kpis.gross_margin:.1f}%")
 
-    c13, c14, c15, c16 = st.columns(4)
-    c13.metric("Net Margin", f"{kpis.net_margin:.1f}%")
-    c14.metric("Monthly New Customers", _fmt_number(kpis.monthly_new_customers))
-    c15.metric("Total Customers (All Time)", _fmt_number(kpis.total_customers))
-    c16.metric("K Value (Viral)", f"{kpis.k_value:.2f}")
+    c16, c17, c18 = st.columns(3)
+    c16.metric("EBITDA Margin", f"{kpis.ebitda_margin:.1f}%")
+    c17.metric("Net Margin", f"{kpis.net_margin:.1f}%")
+    c18.metric("K Value (Viral)", f"{kpis.k_value:.2f}")
 
 
 def render_valuation_panel(val: ValuationResult, inp: ModelInputs) -> None:
