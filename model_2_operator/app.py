@@ -23,6 +23,39 @@ from model_2_operator.compensation import (
     compute_compensation, ALL_PRESETS,
 )
 
+import base64, zlib, json as _json
+
+
+def _encode_deal_state() -> str:
+    """Compress all sidebar input keys into a URL-safe string."""
+    state = {}
+    for k, v in st.session_state.items():
+        if any(k.startswith(p) for p in ("sb_", "b_", "a_", "d_")):
+            # Only serialize simple types
+            if isinstance(v, (int, float, str, bool)):
+                state[k] = v
+    data = _json.dumps(state, separators=(",", ":"))
+    compressed = zlib.compress(data.encode(), level=9)
+    return base64.urlsafe_b64encode(compressed).decode()
+
+
+def _decode_deal_state(encoded: str):
+    """Restore sidebar inputs from a URL-safe string."""
+    try:
+        compressed = base64.urlsafe_b64decode(encoded)
+        state = _json.loads(zlib.decompress(compressed).decode())
+        for k, v in state.items():
+            st.session_state[k] = v
+    except Exception:
+        pass
+
+
+# ── Restore state from URL if present ──
+if "d" in st.query_params and "deal_loaded" not in st.session_state:
+    _decode_deal_state(st.query_params["d"])
+    st.session_state["deal_loaded"] = True
+
+
 st.markdown("# Deal Modeling Tool")
 st.markdown(
     "<span style='color:#666;font-size:14px'>Model both sides of the engagement. "
@@ -438,6 +471,16 @@ deal = DealTerms(
     post_engagement_retention=d_post_eng,
     decay_rate_days=d_decay,
 )
+
+# ── Share button ──
+st.sidebar.markdown("---")
+_encoded = _encode_deal_state()
+_current_param = st.query_params.get("d", "")
+if _encoded != _current_param:
+    st.query_params["d"] = _encoded
+if st.sidebar.button("Copy Share Link", key="share_btn_deal"):
+    st.sidebar.code(f"?d={_encoded}", language=None)
+    st.sidebar.success("Copy the URL from your browser address bar to share this deal model.")
 
 sim_before = run_simulation(inp_before)
 sim_after = run_simulation(inp_after)
@@ -1041,11 +1084,16 @@ comp_result = compute_compensation(active_comp, sim_after, inp_after)
 
 
 # ---------- Tab: Comp Structure (output only — inputs in sidebar) ----------
+# Compute business health KPIs for both states
+_kpis_before = compute_kpis(inp_before, sim_before)
+_kpis_after = compute_kpis(inp_after, sim_after)
+
 with tab_comp:
     st.markdown("### Compensation Structure")
     st.caption("Configure all compensation parameters in the sidebar. Results update live.")
 
-    # ── KPI strip ──
+    # ── Operator compensation KPIs ──
+    st.markdown("**Operator Compensation**")
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("Total Earned", _fd(comp_result.total_earned))
     k2.metric("Avg Monthly", _fd(comp_result.avg_monthly_earnings))
@@ -1059,6 +1107,37 @@ with tab_comp:
     k8.metric("Rev Share", _fd(comp_result.total_rev_share))
     k9.metric("Per-Deal", _fd(comp_result.total_per_deal))
     k10.metric("Total Customers", f"{float(np.sum(comp_result.monthly_new_customers)):,.0f}")
+
+    # ── Business health KPIs (Before → After with deltas) ──
+    st.markdown("---")
+    st.markdown("**Client Business Health — Before vs After Operator**")
+
+    h1, h2, h3, h4, h5 = st.columns(5)
+    _ttp_b = f"{_kpis_before.time_to_profitability_months}mo" if _kpis_before.time_to_profitability_months > 0 else "Never"
+    _ttp_a = f"{_kpis_after.time_to_profitability_months}mo" if _kpis_after.time_to_profitability_months > 0 else "Never"
+    _ttp_delta = _kpis_before.time_to_profitability_days - _kpis_after.time_to_profitability_days
+    h1.metric("Time to Profit", _ttp_a,
+              delta=f"{_ttp_delta:+d} days faster" if _ttp_delta > 0 else None)
+    h2.metric("Cash Needed", _fd(_kpis_after.cash_needed),
+              delta=_fd(_kpis_before.cash_needed - _kpis_after.cash_needed))
+    h3.metric("LTV/CAC", f"{_kpis_after.ltv_cac_ratio:.1f}x",
+              delta=f"{_kpis_after.ltv_cac_ratio - _kpis_before.ltv_cac_ratio:+.1f}x")
+    h4.metric("CAC (Blended)", _fd(_kpis_after.cac_blended),
+              delta=_fd(_kpis_before.cac_blended - _kpis_after.cac_blended))
+    h5.metric("LTV", _fd(_kpis_after.ltv),
+              delta=_fd(_kpis_after.ltv - _kpis_before.ltv))
+
+    h6, h7, h8, h9, h10 = st.columns(5)
+    h6.metric("Payback Period", f"{_kpis_after.payback_period_days:.0f}d",
+              delta=f"{_kpis_before.payback_period_days - _kpis_after.payback_period_days:+.0f}d")
+    h7.metric("Gross Margin", f"{_kpis_after.gross_margin:.1f}%",
+              delta=f"{_kpis_after.gross_margin - _kpis_before.gross_margin:+.1f}%")
+    h8.metric("Monthly FCF", _fd(_kpis_after.monthly_fcf),
+              delta=_fd(_kpis_after.monthly_fcf - _kpis_before.monthly_fcf))
+    h9.metric("Profit/Cust/Mo", _fd(_kpis_after.profit_per_customer_per_month),
+              delta=_fd(_kpis_after.profit_per_customer_per_month - _kpis_before.profit_per_customer_per_month))
+    h10.metric("Cash Conv. Cycle", f"{_kpis_after.cash_conversion_cycle}d",
+               delta=f"{_kpis_before.cash_conversion_cycle - _kpis_after.cash_conversion_cycle:+d}d")
 
     st.markdown("---")
 
