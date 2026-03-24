@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
@@ -43,8 +44,8 @@ class KPIMetrics:
     time_to_self_fund_months: int
 
 
-def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = None,
-                  operator_cost_daily: np.ndarray | None = None) -> KPIMetrics:
+def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: Optional[int] = None,
+                  operator_cost_daily: Optional[np.ndarray] = None) -> KPIMetrics:
     T = len(sim.days)
     end = min(at_day, T) if at_day is not None else T
     trail = min(30, end)
