@@ -488,6 +488,7 @@ deal = DealTerms(
     revenue_share_cap=sb_cap_tot,
     monthly_retainer=sb_retainer,
     pay_per_close=sb_per_deal,
+    upfront_fee=sb_upfront,
     bonuses=[],
     ramp_days=d_ramp,
     ramp_curve=d_ramp_curve,
@@ -638,11 +639,7 @@ with tab_client:
     st.markdown("### What the client gets")
 
     kpis_b = compute_kpis(inp_before, sim_before)
-    try:
-        kpis_a = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
-    except TypeError as e:
-        st.error(f"DEBUG compute_kpis TypeError: {e}")
-        kpis_a = compute_kpis(inp_after, sim_after)
+    kpis_a = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
 
     comparison = pd.DataFrame({
         "Metric": [
@@ -1097,11 +1094,7 @@ with tab_calc:
 # ---------- Tab: Comp Structure (output only — inputs in sidebar) ----------
 # Compute business health KPIs for both states
 _kpis_before = compute_kpis(inp_before, sim_before)
-try:
-    _kpis_after = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
-except TypeError as e:
-    import traceback; traceback.print_exc()
-    _kpis_after = compute_kpis(inp_after, sim_after)
+_kpis_after = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
 
 with tab_comp:
     st.markdown("### Compensation Structure")

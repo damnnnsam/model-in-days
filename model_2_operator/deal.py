@@ -29,6 +29,9 @@ class DealTerms:
     # Pay per close
     pay_per_close: float = 0.0
 
+    # Upfront fee
+    upfront_fee: float = 0.0
+
     # Performance bonuses
     bonuses: List[Bonus] = field(default_factory=list)
 
@@ -226,7 +229,10 @@ def compute_deal(
                 op_bonus[d] += b.amount
                 bonus_triggered[i] = True
 
-    op_total = op_retainer + op_rev_share + op_ppc + op_bonus
+    op_upfront = np.zeros(T)
+    if deal.upfront_fee > 0:
+        op_upfront[0] = deal.upfront_fee
+    op_total = op_upfront + op_retainer + op_rev_share + op_ppc + op_bonus
     op_cumulative = np.cumsum(op_total)
 
     # --- Client-side arrays ---
