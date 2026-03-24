@@ -15,6 +15,9 @@ st.set_page_config(
 from engine.inputs import ModelInputs
 from engine.simulation import run_simulation, to_daily_df
 from engine.valuation import compute_valuation
+import importlib
+import engine.metrics as _metrics_mod
+_metrics_mod = importlib.reload(_metrics_mod)
 from engine.metrics import compute_kpis
 from ui.charts import COLORS, DAILY_LAYOUT
 from model_2_operator.deal import DealTerms, Bonus, compute_deal
