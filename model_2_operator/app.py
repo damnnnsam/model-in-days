@@ -102,7 +102,8 @@ _DEFAULTS = dict(
 
 def _render_state(prefix: str, label: str, before: ModelInputs | None = None, **overrides) -> ModelInputs:
     """Render a full model input set in the sidebar and return ModelInputs.
-    If `before` is provided, each input's tooltip shows the Before value."""
+    If `before` is provided, Starting State is inherited (not rendered) and
+    each input's tooltip shows the Before value."""
     D = {**_DEFAULTS, **overrides}
     p = prefix
 
@@ -119,19 +120,29 @@ def _render_state(prefix: str, label: str, before: ModelInputs | None = None, **
             return f" · Before: {v}%"
         return f" · Before: {v}"
 
-    with st.sidebar.expander(f"{label} — Starting State", expanded=False):
-        cash = st.number_input("Cash in Bank ($)", value=float(D["cash_in_bank"]), step=5000.0, key=f"{p}_cash",
-                               help=f"Cash on hand at t=0.{_bv('cash_in_bank')}")
-        customer_count = int(st.number_input("Current Customers", value=int(D["customer_count"]), step=1, key=f"{p}_cc",
-                                             help=f"Active customers at t=0.{_bv('customer_count', 'd')}"))
-        tam = int(st.number_input("TAM", value=int(D["total_addressable_market"]), step=10000, key=f"{p}_tam",
-                                  help=f"Total addressable market size.{_bv('total_addressable_market', 'd')}"))
-        upfront = st.number_input("Upfront Investment ($)", value=float(D["upfront_investment_costs"]), step=5000.0, key=f"{p}_upfront",
-                                  help=f"One-time startup cost (infrastructure, setup).{_bv('upfront_investment_costs')}")
-        debt = st.number_input("Debt ($)", value=float(D["debt"]), step=5000.0, key=f"{p}_debt",
-                               help=f"Outstanding debt at t=0.{_bv('debt')}")
-        interest = st.number_input("Interest Rate (%)", value=float(D["interest_rate"]), step=0.5, key=f"{p}_interest",
-                                   help=f"Annual interest rate on debt.{_bv('interest_rate', '%')}")
+    # Starting State: only render for Before; After inherits from Before
+    if before is not None:
+        # Inherit starting state from Before
+        cash = before.cash_in_bank
+        customer_count = before.customer_count
+        tam = before.total_addressable_market
+        upfront = before.upfront_investment_costs
+        debt = before.debt
+        interest = before.interest_rate
+    else:
+        with st.sidebar.expander(f"{label} — Starting State", expanded=False):
+            cash = st.number_input("Cash in Bank ($)", value=float(D["cash_in_bank"]), step=5000.0, key=f"{p}_cash",
+                                   help="Cash on hand at t=0.")
+            customer_count = int(st.number_input("Current Customers", value=int(D["customer_count"]), step=1, key=f"{p}_cc",
+                                                 help="Active customers at t=0."))
+            tam = int(st.number_input("TAM", value=int(D["total_addressable_market"]), step=10000, key=f"{p}_tam",
+                                      help="Total addressable market size."))
+            upfront = st.number_input("Upfront Investment ($)", value=float(D["upfront_investment_costs"]), step=5000.0, key=f"{p}_upfront",
+                                      help="One-time startup cost (infrastructure, setup).")
+            debt = st.number_input("Debt ($)", value=float(D["debt"]), step=5000.0, key=f"{p}_debt",
+                                   help="Outstanding debt at t=0.")
+            interest = st.number_input("Interest Rate (%)", value=float(D["interest_rate"]), step=0.5, key=f"{p}_interest",
+                                       help="Annual interest rate on debt.")
 
     with st.sidebar.expander(f"{label} — Product", expanded=(p == "b")):
         price = st.number_input("Price ($)", value=float(D["price_of_offer"]), step=1000.0, key=f"{p}_price",
@@ -245,21 +256,31 @@ def _render_state(prefix: str, label: str, before: ModelInputs | None = None, **
             viral_time, viral_start = int(D["viral_time"]), int(D["viral_start"])
             cs_viral, cm_viral = float(D["cost_to_sell_viral"]), float(D["cost_to_market_viral"])
 
-    with st.sidebar.expander(f"{label} — Admin & Valuation", expanded=False):
-        txn_fee = st.number_input("Transaction Fee (%)", value=float(D["transaction_fee"]), step=0.1, key=f"{p}_txn",
-                                  help=f"Payment processor fee (e.g. Stripe 2.9%).{_bv('transaction_fee', '%')}")
-        fc = st.number_input("Fixed Costs ($/mo)", value=float(D["fixed_costs_per_month"]), step=1000.0, key=f"{p}_fc",
-                             help=f"Base monthly overhead (rent, salaries, tools).{_bv('fixed_costs_per_month')}")
-        fc_scale = st.number_input("FC per 100 Cust ($/mo)", value=float(D["fixed_cost_increase_per_100_customers"]), step=500.0, key=f"{p}_fcs",
-                                   help=f"Additional overhead per 100 active customers.{_bv('fixed_cost_increase_per_100_customers')}")
-        tax = st.number_input("Tax Rate (%)", value=float(D["tax_rate"]), step=1.0, key=f"{p}_tax",
-                              help=f"Corporate tax rate on positive EBIT.{_bv('tax_rate', '%')}")
-        disc = st.number_input("Discount Rate (%)", value=float(D["discount_rate"]), step=0.5, key=f"{p}_disc",
-                               help=f"WACC / required rate of return.{_bv('discount_rate', '%')}")
-        growth = st.number_input("Perpetual Growth (%)", value=float(D["perpetual_growth_rate"]), step=0.5, key=f"{p}_growth",
-                                 help=f"Long-term growth for terminal value.{_bv('perpetual_growth_rate', '%')}")
-        time_max = int(st.number_input("Simulation Days", value=int(D["time_max"]), step=100, key=f"{p}_tmax",
-                                       help=f"Total simulation period.{_bv('time_max', 'd')}"))
+    # Admin & Valuation: only render for Before; After inherits
+    if before is not None:
+        txn_fee = before.transaction_fee
+        fc = before.fixed_costs_per_month
+        fc_scale = before.fixed_cost_increase_per_100_customers
+        tax = before.tax_rate
+        disc = before.discount_rate
+        growth = before.perpetual_growth_rate
+        time_max = before.time_max
+    else:
+        with st.sidebar.expander(f"{label} — Admin & Valuation", expanded=False):
+            txn_fee = st.number_input("Transaction Fee (%)", value=float(D["transaction_fee"]), step=0.1, key=f"{p}_txn",
+                                      help="Payment processor fee (e.g. Stripe 2.9%).")
+            fc = st.number_input("Fixed Costs ($/mo)", value=float(D["fixed_costs_per_month"]), step=1000.0, key=f"{p}_fc",
+                                 help="Base monthly overhead (rent, salaries, tools).")
+            fc_scale = st.number_input("FC per 100 Cust ($/mo)", value=float(D["fixed_cost_increase_per_100_customers"]), step=500.0, key=f"{p}_fcs",
+                                       help="Additional overhead per 100 active customers.")
+            tax = st.number_input("Tax Rate (%)", value=float(D["tax_rate"]), step=1.0, key=f"{p}_tax",
+                                  help="Corporate tax rate on positive EBIT.")
+            disc = st.number_input("Discount Rate (%)", value=float(D["discount_rate"]), step=0.5, key=f"{p}_disc",
+                                   help="WACC / required rate of return.")
+            growth = st.number_input("Perpetual Growth (%)", value=float(D["perpetual_growth_rate"]), step=0.5, key=f"{p}_growth",
+                                     help="Long-term growth for terminal value.")
+            time_max = int(st.number_input("Simulation Days", value=int(D["time_max"]), step=100, key=f"{p}_tmax",
+                                           help="Total simulation period."))
 
     return ModelInputs(
         cash_in_bank=cash, customer_count=customer_count,
