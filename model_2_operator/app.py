@@ -979,9 +979,296 @@ with tab_roi:
 # ---------- Tab: Calculations ----------
 with tab_calc:
     st.markdown("### Computation Audit Trail")
-    st.caption("Full traceability: every number is verifiable.")
+    st.caption("Every number, every formula, every step. Verify anything.")
 
-    st.markdown("#### Input Summary — What Changed")
+    # ── Helper: render channel math for a given state ──
+    def _channel_math(inp, label):
+        lines = ""
+        if inp.use_outbound:
+            _cd = inp.contacts_per_month / 30
+            _ld = _cd * (inp.outbound_conversion_rate / 100)
+            _cusd = _ld * (inp.lead_conversion_rate_outbound / 100)
+            _delay = inp.time_to_market_outbound + inp.time_to_sell
+            lines += f"""OUTBOUND ({label}):
+  contacts/day     = {inp.contacts_per_month:,} / 30 = {_cd:,.1f}
+  leads/day        = {_cd:,.1f} × {inp.outbound_conversion_rate}% = {_ld:,.2f}
+  customers/day    = {_ld:,.2f} × {inp.lead_conversion_rate_outbound}% = {_cusd:,.4f}
+  customers/month  = {_cusd * 30:,.1f}
+  delay            = {inp.time_to_market_outbound} + {inp.time_to_sell} = {_delay} days
+"""
+        if inp.use_inbound and inp.cpm > 0:
+            _imp = (inp.media_spend / inp.cpm) * 1000 / 30
+            _clk = _imp * (inp.ctr / 100)
+            _ld = _clk * (inp.funnel_conversion_rate / 100)
+            _cusd = _ld * (inp.lead_conversion_rate_inbound / 100)
+            _delay = inp.time_to_market_inbound + inp.time_to_sell
+            lines += f"""INBOUND ({label}):
+  impressions/day  = (${inp.media_spend:,.0f} / ${inp.cpm:,.0f}) × 1000 / 30 = {_imp:,.0f}
+  clicks/day       = {_imp:,.0f} × {inp.ctr}% = {_clk:,.1f}
+  leads/day        = {_clk:,.1f} × {inp.funnel_conversion_rate}% = {_ld:,.2f}
+  customers/day    = {_ld:,.2f} × {inp.lead_conversion_rate_inbound}% = {_cusd:,.4f}
+  customers/month  = {_cusd * 30:,.1f}
+  delay            = {inp.time_to_market_inbound} + {inp.time_to_sell} = {_delay} days
+"""
+        if inp.use_organic:
+            _vd = inp.organic_views_per_month / 30
+            _ld = _vd * (inp.organic_view_to_lead_rate / 100)
+            _cusd = _ld * (inp.lead_to_customer_rate_organic / 100)
+            _delay = inp.time_to_market_organic + inp.time_to_sell
+            lines += f"""ORGANIC ({label}):
+  views/day        = {inp.organic_views_per_month:,} / 30 = {_vd:,.0f}
+  leads/day        = {_vd:,.0f} × {inp.organic_view_to_lead_rate}% = {_ld:,.2f}
+  customers/day    = {_ld:,.2f} × {inp.lead_to_customer_rate_organic}% = {_cusd:,.4f}
+  customers/month  = {_cusd * 30:,.1f}
+  delay            = {inp.time_to_market_organic} + {inp.time_to_sell} = {_delay} days
+"""
+        return lines.rstrip()
+
+    # ── 1. Customer Acquisition ──
+    st.markdown("### 1. Customer Acquisition — Before vs After")
+    _calc1, _calc2 = st.columns(2)
+    with _calc1:
+        st.code(_channel_math(inp_before, "Before"), language=None)
+    with _calc2:
+        st.code(_channel_math(inp_after, "After"), language=None)
+
+    # ── 2. Revenue Per Customer ──
+    def _unit_econ(inp, label):
+        _rc = inp.price_of_offer * (inp.realization_rate / 100)
+        _fc = inp.price_of_offer * (inp.cost_to_fulfill / 100)
+        _sc = inp.price_of_offer * (inp.cost_to_sell / 100)
+        _tc = _rc * (inp.transaction_fee / 100)
+        _contrib = _rc - _fc - _sc - _tc
+        lines = f"""NEW CUSTOMER ({label}):
+  revenue_collected = ${inp.price_of_offer:,.0f} × {inp.realization_rate}% = ${_rc:,.0f}
+  - fulfillment     = ${inp.price_of_offer:,.0f} × {inp.cost_to_fulfill}% = ${_fc:,.0f}
+  - sales comm      = ${inp.price_of_offer:,.0f} × {inp.cost_to_sell}% = ${_sc:,.0f}
+  - transaction fee  = ${_rc:,.0f} × {inp.transaction_fee}% = ${_tc:,.0f}
+  = contribution     = ${_contrib:,.0f}
+
+  cash collected over {inp.time_to_collect} days
+  refund rate: {inp.refund_rate}% after {inp.refund_period} days
+"""
+        if inp.churn_rate < 100:
+            _rr = 100 - inp.churn_rate
+            _rv = inp.price_of_renewal * (inp.realization_rate / 100)
+            _rf = inp.price_of_renewal * (inp.cost_to_fulfill_renewal / 100)
+            _rs = inp.price_of_renewal * (inp.cost_to_sell_renewal / 100)
+            _rt = _rv * (inp.transaction_fee / 100)
+            _rc2 = _rv - _rf - _rs - _rt
+            lines += f"""
+RENEWAL ({label}):
+  renewal rate       = {_rr:.0f}%
+  renewal price      = ${inp.price_of_renewal:,.0f}
+  revenue_collected  = ${_rv:,.0f}
+  - fulfillment      = ${_rf:,.0f}
+  - sales comm       = ${_rs:,.0f}
+  - transaction fee  = ${_rt:,.0f}
+  = contribution     = ${_rc2:,.0f}
+  contract: {inp.contract_length} days, renewal of renewals: {inp.renewal_rate_of_renewals}%"""
+        return lines.rstrip()
+
+    st.markdown("### 2. Revenue Per Customer")
+    _calc3, _calc4 = st.columns(2)
+    with _calc3:
+        st.code(_unit_econ(inp_before, "Before"), language=None)
+    with _calc4:
+        st.code(_unit_econ(inp_after, "After"), language=None)
+
+    # ── 3. Lifetime Value ──
+    def _ltv_calc(inp):
+        _P = inp.price_of_offer
+        _RR = inp.realization_rate / 100
+        _cf = inp.cost_to_fulfill / 100
+        _ref = inp.refund_rate / 100
+        _ch = inp.churn_rate / 100
+        _fv = _P * _RR * (1 - _ref) - _P * _cf
+        _pr = inp.price_of_renewal
+        _cfr = inp.cost_to_fulfill_renewal / 100
+        _csr = inp.cost_to_sell_renewal / 100
+        _rv = _pr * _RR - _pr * _cfr - _pr * _csr
+        _pf = (1 - _ch) * (1 - _ref)
+        _ps = inp.renewal_rate_of_renewals / 100
+        _er = _pf * _rv / (1 - _ps) if 0 < _ps < 1 else _pf * _rv
+        _ltv = _fv + _er
+        return _ltv, f"""first_purchase = ${_P:,.0f} × {_RR:.2f} × {1-_ref:.2f} - ${_P:,.0f} × {_cf:.2f} = ${_fv:,.0f}
+renewal_value  = ${_pr:,.0f} × {_RR:.2f} - fulfill - sales = ${_rv:,.0f}
+p(1st renewal) = (1-{_ch:.2f}) × (1-{_ref:.2f}) = {_pf:.3f}
+p(subsequent)  = {_ps:.2f}
+exp_renewals   = {_pf:.3f} × ${_rv:,.0f} / (1-{_ps:.2f}) = ${_er:,.0f}
+LTV            = ${_fv:,.0f} + ${_er:,.0f} = ${_ltv:,.0f}"""
+
+    st.markdown("### 3. Lifetime Value")
+    _ltv_b, _ltv_b_text = _ltv_calc(inp_before)
+    _ltv_a, _ltv_a_text = _ltv_calc(inp_after)
+    _calc5, _calc6 = st.columns(2)
+    with _calc5:
+        st.code(f"BEFORE:\n{_ltv_b_text}", language=None)
+    with _calc6:
+        st.code(f"AFTER:\n{_ltv_a_text}", language=None)
+
+    # ── 4. CAC ──
+    st.markdown("### 4. Customer Acquisition Cost")
+    def _cac_calc(inp, sim, label):
+        _tm = float(np.sum(sim.cost_marketing))
+        _ts = float(np.sum(sim.cost_sales))
+        _tc = float(np.sum(sim.new_customers_total))
+        _cac = (_tm + _ts) / max(_tc, 1)
+        return _cac, f"""{label}:
+  total marketing   = ${_tm:,.0f}
+  total sales cost  = ${_ts:,.0f}
+  total customers   = {_tc:,.0f}
+  CAC (blended)     = ${_cac:,.0f}"""
+
+    _cac_b, _cac_b_text = _cac_calc(inp_before, sim_before, "Before")
+    _cac_a, _cac_a_text = _cac_calc(inp_after, sim_after, "After")
+    _calc7, _calc8 = st.columns(2)
+    with _calc7:
+        st.code(f"{_cac_b_text}\n\n  LTV / CAC = ${_ltv_b:,.0f} / ${_cac_b:,.0f} = {_ltv_b/max(_cac_b,1):.1f}x", language=None)
+    with _calc8:
+        st.code(f"{_cac_a_text}\n\n  LTV / CAC = ${_ltv_a:,.0f} / ${_cac_a:,.0f} = {_ltv_a/max(_cac_a,1):.1f}x", language=None)
+
+    # ── 5. Monthly Cost Structure ──
+    st.markdown("### 5. Monthly Cost Structure")
+    def _cost_structure(inp, label):
+        _dm = inp.media_spend if inp.use_inbound else 0
+        _do = (inp.number_of_sdrs * inp.outbound_salary) if inp.use_outbound else 0
+        _dg = inp.organic_cost_per_month if inp.use_organic else 0
+        _di = (inp.debt * inp.interest_rate / 100) / 365
+        return f"""{label}:
+  MARKETING (monthly):
+    inbound media   = ${_dm:,.0f}/mo {"(disabled)" if not inp.use_inbound else ""}
+    outbound SDRs   = {inp.number_of_sdrs} × ${inp.outbound_salary:,.0f} = ${_do:,.0f}/mo {"(disabled)" if not inp.use_outbound else ""}
+    organic         = ${_dg:,.0f}/mo {"(disabled)" if not inp.use_organic else ""}
+  FIXED:
+    base            = ${inp.fixed_costs_per_month:,.0f}/mo
+    + scaling       = ${inp.fixed_cost_increase_per_100_customers:,.0f}/mo per 100 customers
+  TRANSACTION FEE   = {inp.transaction_fee}%
+  INTEREST          = ${inp.debt:,.0f} × {inp.interest_rate}% / 365 = ${_di:,.0f}/day
+  TAX RATE          = {inp.tax_rate}%"""
+
+    _calc9, _calc10 = st.columns(2)
+    with _calc9:
+        st.code(_cost_structure(inp_before, "Before"), language=None)
+    with _calc10:
+        st.code(_cost_structure(inp_after, "After"), language=None)
+
+    # ── 6. P&L Snapshot (last day of simulation) ──
+    st.markdown("### 6. P&L Snapshot — End of Simulation")
+    def _pl_snapshot(sim, inp, label):
+        _d = len(sim.days) - 1
+        _s = max(0, _d - 29)
+        _tr = float(np.sum(sim.cash_collected_total[_s:_d+1]))
+        _tc = float(np.sum(sim.cost_total[_s:_d+1]))
+        _gp = float(np.sum(sim.gross_profit[_s:_d+1]))
+        _eb = float(np.sum(sim.ebitda[_s:_d+1]))
+        _ni = float(np.sum(sim.net_income[_s:_d+1]))
+        _fcf = float(np.sum(sim.free_cash_flow[_s:_d+1]))
+        return f"""{label} — Trailing 30 Days (day {_s+1} to {_d+1}):
+  Cash collected     ${_tr:>12,.0f}
+  - Total costs      {-_tc:>12,.0f}
+  ────────────────────────────────
+  Gross Profit       ${_gp:>12,.0f}
+  EBITDA             ${_eb:>12,.0f}
+  Net Income         ${_ni:>12,.0f}
+  Free Cash Flow     ${_fcf:>12,.0f}
+
+  Active customers   {sim.active_customers[_d]:>12,.0f}
+  Cumulative FCF     ${sim.cumulative_fcf[_d]:>12,.0f}
+  Cash balance       ${sim.cash_balance[_d]:>12,.0f}"""
+
+    _calc11, _calc12 = st.columns(2)
+    with _calc11:
+        st.code(_pl_snapshot(sim_before, inp_before, "Before"), language=None)
+    with _calc12:
+        st.code(_pl_snapshot(sim_after, inp_after, "After"), language=None)
+
+    # ── 7. DCF Valuation ──
+    st.markdown("### 7. DCF Valuation — Before vs After")
+    def _dcf_calc(inp, val, label):
+        return f"""{label}:
+  Projection         = {inp.projection_period_dcf} days ({inp.projection_period_dcf/365:.1f} years)
+  Discount rate      = {inp.discount_rate}%
+  Perpetual growth   = {inp.perpetual_growth_rate}%
+
+  PV of FCF          = ${val.pv_fcf:>14,.0f}
+  Terminal value      = ${val.terminal_value:>14,.0f}
+  PV of terminal      = ${val.pv_terminal_value:>14,.0f}
+  ────────────────────────────────────
+  Enterprise value    = ${val.enterprise_value_dcf:>14,.0f}
+  - Debt + Cash       {-inp.debt + max(val.cash_at_valuation, 0):>14,.0f}
+  ────────────────────────────────────
+  Equity value        = ${val.equity_value_dcf:>14,.0f}
+
+  TV as % of EV      = {val.pv_terminal_value / max(val.enterprise_value_dcf, 1) * 100:.0f}%"""
+
+    _calc13, _calc14 = st.columns(2)
+    with _calc13:
+        st.code(_dcf_calc(inp_before, val_before, "Before"), language=None)
+    with _calc14:
+        st.code(_dcf_calc(inp_after, val_after, "After"), language=None)
+
+    st.code(f"""EQUITY DELTA  = ${val_after.equity_value_dcf:,.0f} - ${val_before.equity_value_dcf:,.0f} = ${val_after.equity_value_dcf - val_before.equity_value_dcf:,.0f}
+EQUITY CHANGE = {(val_after.equity_value_dcf - val_before.equity_value_dcf) / max(val_before.equity_value_dcf, 1) * 100:+,.0f}%""", language=None)
+
+    # ── 8. Operator Compensation Structure ──
+    st.markdown("### 8. Operator Compensation")
+    _comp_lines = []
+    if sb_upfront > 0:
+        _comp_lines.append(f"  Upfront Fee        = ${sb_upfront:,.0f}" + (f" (split: {active_comp.upfront_fee_split_pct_signing:.0f}% signing, rest day {active_comp.upfront_fee_split_day_2})" if active_comp.upfront_fee_split else " (at signing)"))
+    _comp_lines.append(f"  Monthly Retainer   = ${sb_retainer:,.0f}/mo")
+    if sb_rs_mode != "none":
+        _comp_lines.append(f"  Rev Share          = {sb_rs_pct:.1f}% on {sb_rs_basis}")
+        if sb_cap_tot > 0:
+            _comp_lines.append(f"  Rev Share Cap      = ${sb_cap_tot:,.0f}")
+    if sb_per_deal > 0:
+        _comp_lines.append(f"  Per-Deal Bonus     = ${sb_per_deal:,.0f}")
+    _comp_lines.append(f"  Engagement         = {d_duration} days, ramp {d_ramp} days ({d_ramp_curve})")
+    _comp_lines.append(f"  Post-engagement    = {d_post_eng}")
+    st.code("\n".join(_comp_lines), language=None)
+
+    st.code(f"""TOTAL EARNED (engagement period):
+  Upfront            ${comp_result.total_upfront:>12,.0f}
+  Retainer           ${comp_result.total_retainer:>12,.0f}
+  Rev Share          ${comp_result.total_rev_share:>12,.0f}
+  Per-Deal           ${comp_result.total_per_deal:>12,.0f}
+  ────────────────────────────────────
+  TOTAL              ${comp_result.total_earned:>12,.0f}
+
+  Avg monthly        ${comp_result.avg_monthly_earnings:>12,.0f}
+  Eff $/customer     ${comp_result.effective_rate_per_customer:>12,.0f}
+  Eff rev share rate {comp_result.effective_rev_share_rate:>11.1f}%""", language=None)
+
+    # ── 9. Cash Conversion Cycle ──
+    st.markdown("### 9. Cash Conversion Cycle")
+    def _ccc_calc(inp, label):
+        _ttm = 0
+        _ttm_src = "none"
+        if inp.use_outbound:
+            _ttm = inp.time_to_market_outbound
+            _ttm_src = f"time_to_market_outbound = {_ttm}"
+        elif inp.use_inbound:
+            _ttm = inp.time_to_market_inbound
+            _ttm_src = f"time_to_market_inbound = {_ttm}"
+        elif inp.use_organic:
+            _ttm = inp.time_to_market_organic
+            _ttm_src = f"time_to_market_organic = {_ttm}"
+        _ccc = _ttm + inp.time_to_sell + inp.time_to_collect
+        return f"""{label}:
+  CCC = time_to_market + time_to_sell + time_to_collect
+      = {_ttm_src}
+      + time_to_sell = {inp.time_to_sell}
+      + time_to_collect = {inp.time_to_collect}
+      = {_ccc} days"""
+
+    _calc15, _calc16 = st.columns(2)
+    with _calc15:
+        st.code(_ccc_calc(inp_before, "Before"), language=None)
+    with _calc16:
+        st.code(_ccc_calc(inp_after, "After"), language=None)
+
+    # ── 10. Input Delta Summary ──
+    st.markdown("### 10. Input Deltas")
     _DIFF_FIELDS = [
         ("use_inbound", "Inbound Enabled"), ("use_outbound", "Outbound Enabled"),
         ("use_organic", "Organic Enabled"), ("use_viral", "Viral Enabled"),
@@ -1031,25 +1318,8 @@ with tab_calc:
     else:
         st.info("Both states are identical — adjust the 'After Operator' inputs to model improvements.")
 
-    st.markdown("#### Deal Structure")
-    deal_lines = [
-        f"Rev Share Mode: {sb_rs_mode} at {sb_rs_pct:.1f}% on {sb_rs_basis}",
-        f"Monthly Retainer: {_fd(sb_retainer)}",
-    ]
-    if sb_per_deal > 0:
-        deal_lines.append(f"Per-Deal Bonus: {_fd(sb_per_deal)}")
-    if sb_cap_tot > 0:
-        deal_lines.append(f"Rev Share Cap: {_fd(sb_cap_tot)}")
-    if sb_upfront > 0:
-        deal_lines.append(f"Upfront Fee: {_fd(sb_upfront)}")
-    if sb_decay:
-        deal_lines.append(f"Decay: {len(sb_decay_schedule)} periods")
-    deal_lines.append(f"Engagement: {d_duration} days, ramp {d_ramp} days ({d_ramp_curve})")
-    deal_lines.append(f"Post-engagement: {d_post_eng}")
-    for line in deal_lines:
-        st.markdown(f"- {line}")
-
-    st.markdown("#### Monthly Computation Chain")
+    # ── 11. Monthly Computation Chain ──
+    st.markdown("### 11. Monthly Computation Chain")
     max_months_calc = min(T // 30, 30)
     calc_rows = []
     for m in range(1, max_months_calc + 1):
@@ -1079,16 +1349,29 @@ with tab_calc:
         })
     st.dataframe(pd.DataFrame(calc_rows), use_container_width=True, hide_index=True)
 
-    st.markdown("#### Key Formulas")
+    # ── 12. Key Formulas ──
+    st.markdown("### 12. Key Formulas")
     be_formula = f"Day {result.break_even_day}" if result.break_even_day >= 0 else "Never"
-    st.markdown(
-        f"- **Value Created** = FCF(after, ramped) − FCF(before) = {_fd(result.total_value_created)}\n"
-        f"- **Operator Earned** = Retainer + Rev Share + Pay/Close + Bonuses = {_fd(result.operator_total_earned)}\n"
-        f"- **Client Net Gain** = Value Created − Operator Earned = {_fd(result.client_net_gain)}\n"
-        f"- **Client ROI** = Client Net Gain / Operator Earned = {result.client_roi:.1f}x\n"
-        f"- **Lifetime ROI** = Cumulative Net / Cumulative Op Cost at sim end = {result.lifetime_roi:.1f}x\n"
-        f"- **Break-Even Day** = First day client cumulative net ≥ 0 = {be_formula}"
-    )
+    st.code(f"""Value Created      = FCF(after, ramped) − FCF(before)
+                   = {_fd(result.total_value_created)}
+
+Operator Earned    = Upfront + Retainer + Rev Share + Pay/Close + Bonuses
+                   = {_fd(comp_result.total_upfront)} + {_fd(comp_result.total_retainer)} + {_fd(comp_result.total_rev_share)} + {_fd(comp_result.total_per_deal)}
+                   = {_fd(result.operator_total_earned)}
+
+Client Net Gain    = Value Created − Operator Earned
+                   = {_fd(result.total_value_created)} − {_fd(result.operator_total_earned)}
+                   = {_fd(result.client_net_gain)}
+
+Client ROI         = Client Net Gain / Operator Earned
+                   = {_fd(result.client_net_gain)} / {_fd(result.operator_total_earned)}
+                   = {result.client_roi:.1f}x
+
+Lifetime ROI       = Cumulative Net / Cumulative Op Cost at sim end
+                   = {result.lifetime_roi:.1f}x
+
+Break-Even Day     = First day client cumulative net ≥ 0
+                   = {be_formula}""", language=None)
 
 
 # ---------- Tab: Comp Structure (output only — inputs in sidebar) ----------
