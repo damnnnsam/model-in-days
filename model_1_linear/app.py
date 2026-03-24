@@ -1,3 +1,6 @@
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 import streamlit as st
 
 st.set_page_config(
@@ -34,8 +37,11 @@ st.markdown("<span style='color:#666;font-size:14px'>Use this model to find the 
 inp = render_sidebar()
 
 import json, os
-with open(os.path.join(os.path.dirname(__file__), "current_model.json"), "w") as _f:
-    json.dump(inp.__dict__, _f, indent=2, default=str)
+try:
+    with open(os.path.join(os.path.dirname(__file__), "current_model.json"), "w") as _f:
+        json.dump(inp.__dict__, _f, indent=2, default=str)
+except OSError:
+    pass  # read-only filesystem (e.g. Streamlit Cloud)
 
 from engine.url_state import encode_model
 encoded = encode_model(inp)

@@ -1,0 +1,470 @@
+MODEL 2: GROWTH OPERATOR DEAL — FULL SPECIFICATION
+=====================================================
+
+
+================================================================================
+PURPOSE
+================================================================================
+
+Model both sides of a growth consulting engagement. Answer:
+
+  For the client:
+  - "What's my ROI on hiring this operator, measured over time?"
+  - "At what month does the engagement pay for itself?"
+  - "What's the lifetime value of the operator's contribution?"
+
+  For the operator:
+  - "What will I earn from this engagement?"
+  - "Which deal structure maximizes my income while keeping the client happy?"
+  - "What's my effective rate per qualified outcome?"
+
+  For negotiation:
+  - "What deal structure makes both sides profitable?"
+  - "Where's the sweet spot between operator incentives and client ROI?"
+  - "How does retention quality change the economics for both sides?"
+
+
+================================================================================
+ARCHITECTURE
+================================================================================
+
+Model 2 uses Model 1's simulation engine. It runs the engine TWICE:
+
+  Run 1: Client's business with CURRENT metrics (before operator)
+  Run 2: Client's business with IMPROVED metrics (after operator)
+
+The difference between the two runs is the VALUE CREATED by the operator.
+A deal structure defines how that value splits between operator and client.
+
+  value_created(t)    = FCF_after(t) - FCF_before(t)
+  operator_earned(t)  = f(deal_structure, value_created, events)
+  client_net_gain(t)  = value_created(t) - operator_earned(t)
+  client_roi(t)       = cumulative_client_net_gain(t) / cumulative_operator_earned(t)
+
+
+================================================================================
+INPUTS — THREE SECTIONS
+================================================================================
+
+SECTION 1: CLIENT'S CURRENT BUSINESS (Before Operator)
+
+  Inherit Model 1's FULL input set:
+  - Starting state (cash, customers, TAM, upfront, debt)
+  - All channels (outbound, inbound, organic, viral — each toggleable)
+  - Product (price, realization, fulfillment, collection, refunds, contract)
+  - Renewals (churn, renewal price, renewal costs, renewal-of-renewals)
+  - Administration (transaction fee, fixed costs, scaling)
+  - Valuation (tax, discount rate, growth rate, shares)
+
+  This is the baseline. What happens if the client does nothing different.
+
+SECTION 2: OPERATOR'S IMPROVEMENTS (After Operator)
+
+  The operator doesn't change every input — they improve specific metrics.
+  Show ONLY the metrics the operator can affect, with the current value
+  pre-filled and an override field next to it:
+
+  Acquisition improvements:
+  - Reply rate / contact-to-lead rate (outbound)
+  - Lead-to-customer rate (any channel)
+  - Funnel conversion rate (inbound)
+  - CTR (inbound)
+  - Close rate component (if we split lead→customer into qualify + close)
+
+  Retention improvements:
+  - Churn rate
+  - Renewal rate of renewals
+
+  Efficiency improvements:
+  - Cost to fulfill (%)
+  - Cost to sell (%)
+  - Time to sell (days) — shorter sales cycle
+
+  Scaling:
+  - Number of SDRs (operator brings more capacity)
+  - Contacts per month (higher volume)
+  - Media spend (if operator manages paid)
+
+  Each override shows:
+    Current: 0.15%  →  After: [0.50%]  (Δ +0.35pp)
+
+  RAMP LOGIC:
+  Improvements don't happen instantly. The operator needs time to:
+  - Audit the current system
+  - Build new campaigns / angles
+  - Test and iterate
+  - Train the team
+
+  ramp_start_day: when the operator begins work (default: 0)
+  ramp_duration: days until improvements reach full effect (default: 60)
+  ramp_curve: linear (default) or step (instant at ramp end)
+
+  During the ramp period, the "after" metrics interpolate from "before"
+  to "after" values:
+    metric(d) = before + (after - before) × min(1, (d - ramp_start) / ramp_duration)
+
+  This means the simulation runs with gradually improving metrics,
+  which is how real engagements work.
+
+SECTION 3: DEAL TERMS
+
+  The deal structure defines what the operator earns. Multiple
+  compensation models can be combined (e.g., retainer + rev share + per call).
+
+
+================================================================================
+DEAL STRUCTURE MODELS
+================================================================================
+
+MODEL A: REVENUE SHARE
+
+  The operator earns a percentage of revenue. But "revenue" can mean
+  different things, and the share can vary over time.
+
+  revenue_share_basis:
+    "delta"         — % of incremental revenue above baseline (default)
+    "new_revenue"   — % of all new customer revenue (not renewals)
+    "total_revenue" — % of all revenue (including renewals)
+    "gross_profit"  — % of gross profit instead of revenue
+
+  revenue_share_pct: the percentage (e.g., 10%)
+
+  revenue_share_duration: how long the operator earns on each customer
+    "first_payment"  — one-time, on the first payment only
+    "fixed_months"   — for N months of that customer's lifetime
+    "lifetime"       — as long as the customer pays
+    "phased"         — declining schedule (see below)
+
+  If "fixed_months":
+    revenue_share_months: int (e.g., 6 = operator earns for 6 months per customer)
+
+  If "phased":
+    revenue_share_schedule: list of (months, pct) tuples
+    Example: [(1, 20), (3, 15), (6, 10), (0, 5)]
+    = 20% month 1, 15% months 2-3, 10% months 4-6, 5% forever after
+
+  revenue_share_cap: maximum total earned per customer (0 = no cap)
+    Example: cap at $2,000 per customer — once earned $2K from that
+    customer's revenue, share stops for that customer.
+
+MODEL B: MONTHLY RETAINER
+
+  Fixed monthly payment regardless of results.
+
+  monthly_retainer: $ amount
+  retainer_duration: months (0 = same as engagement duration)
+  retainer_starts: day (default: engagement_start)
+
+MODEL C: PERFORMANCE BONUS
+
+  One-time payments triggered by milestones.
+
+  bonuses: list of {trigger, amount}
+
+  Trigger types:
+  - "day_N"               — paid on day N of engagement
+  - "customers_N"         — paid when N new customers acquired
+  - "revenue_N"           — paid when monthly revenue exceeds $N
+  - "profitability"       — paid when business reaches profitability
+  - "retention_target"    — paid when churn drops below X%
+
+  Example:
+  [
+    {"trigger": "day_90", "amount": 5000},
+    {"trigger": "customers_50", "amount": 10000},
+    {"trigger": "revenue_100000", "amount": 15000},
+  ]
+
+MODEL D: PAY PER EVENT
+
+  Operator earns a fixed fee per qualifying event.
+
+  pay_per_event_type:
+    "qualified_call"     — per call booked that meets criteria
+    "show"               — per call that actually happens (no-shows don't count)
+    "demo"               — per demo completed
+    "close"              — per closed deal
+    "activation"         — per customer who completes onboarding
+    "retained_30"        — per customer who stays 30+ days
+
+  pay_per_event_amount: $ per event
+
+  Note: the simulation tracks new_customers_total per day. For event-based
+  pay, we need to map simulation events to payment events:
+  - "qualified_call" = leads generated (before close rate applied)
+  - "show" = leads × show_rate (new input, default 80%)
+  - "demo" = same as show for most businesses
+  - "close" = new customers
+  - "activation" = new customers × (1 - refund_rate) after refund_period
+  - "retained_30" = new customers still active after 30 days
+
+  The pay-per-event model is powerful because it lets the operator
+  earn based on what they control (calls booked) rather than what
+  they don't fully control (closes, retention).
+
+MODEL E: COMMISSION ON FIRST SALE
+
+  Operator earns a flat % of the first payment from each new customer.
+  Similar to rev share on "first_payment" but explicitly modeled as
+  a commission rather than ongoing share.
+
+  first_sale_commission_pct: % of first payment
+  
+  This is the simplest deal structure. No ongoing obligation, no
+  retention risk. But it doesn't incentivize the operator to bring
+  in customers who stay.
+
+MODEL F: EQUITY / PROFIT SHARE
+
+  Operator earns a % of equity value created or profit generated.
+
+  equity_share_pct: % of equity value delta
+  profit_share_pct: % of net profit (after all costs)
+  
+  Equity share is typically settled at exit or at periodic valuations.
+  Profit share is settled monthly/quarterly from actual profits.
+
+COMBINING MODELS:
+
+  Any combination is valid:
+  - Retainer + rev share (most common)
+  - Retainer + pay per call (common for lead gen agencies)
+  - Rev share + performance bonus (incentive-aligned)
+  - Pay per close + retainer (hybrid)
+  - Phased rev share + bonus at milestones
+
+  The total operator earnings per day is the sum of all active models.
+
+
+================================================================================
+ROI OVER TIME — THE KEY FEATURE
+================================================================================
+
+ROI is not a single number. It's a curve.
+
+For each day d of the engagement:
+
+  cumulative_value_created(d) = Σ (FCF_after(t) - FCF_before(t)) for t=0..d
+  cumulative_operator_cost(d) = Σ operator_total_earnings(t) for t=0..d
+  cumulative_client_net_gain(d) = cumulative_value_created(d) - cumulative_operator_cost(d)
+  roi(d) = cumulative_client_net_gain(d) / cumulative_operator_cost(d)
+
+Key points on the ROI curve:
+
+  1. ROI break-even day: first day where roi(d) ≥ 0
+     "The engagement pays for itself on day X"
+
+  2. ROI at engagement end: roi(engagement_duration)
+     "By the end of the contract, the client made Xx on their investment"
+
+  3. Lifetime ROI: roi(simulation_end)
+     "Including the long-tail effect of retained customers, total ROI is Xx"
+
+  4. ROI inflection: the day where roi changes fastest
+     "The value really kicks in around month 4"
+
+WHY ROI OVER TIME MATTERS FOR RETENTION BUSINESSES:
+
+  Month 1: Operator earns retainer. No customers closed yet (ramp).
+           ROI = negative. Client is paying, getting nothing.
+
+  Month 3: Operator starts closing deals. Revenue trickles in.
+           But retainer + rev share > revenue generated so far.
+           ROI still negative but improving.
+
+  Month 6: 50+ customers acquired. Renewals starting to compound.
+           Revenue from retained customers exceeds operator cost.
+           ROI crosses zero. Break-even.
+
+  Month 12: 100+ customers. Renewals compounding. The customers
+            acquired in months 3-6 have renewed 3+ times each.
+            ROI = 3-5x. The engagement is clearly profitable.
+
+  Month 24: Even if operator left at month 12, the retained customers
+            continue generating revenue. The "shadow ROI" keeps growing.
+
+  This is the fundamental insight: in retention businesses, the
+  operator's value grows AFTER the engagement ends because the
+  customers they acquired keep compounding. A 12-month engagement
+  that looks marginal at month 12 might be 10x by month 24.
+
+  The model must show this — the ROI curve must extend beyond
+  the engagement end to capture the long-tail value.
+
+POST-ENGAGEMENT VALUE:
+
+  After the engagement ends, the operator stops earning (no more
+  retainer, rev share, etc.). But the improved metrics may or may
+  not persist:
+
+  post_engagement_retention:
+    "metrics_persist"  — improvements stay (operator trained the team,
+                         built systems, improved product)
+    "metrics_decay"    — improvements gradually revert to baseline
+                         (operator was doing the work themselves)
+    "metrics_partial"  — some improvements persist, some revert
+
+  If "metrics_decay":
+    decay_rate: how fast metrics revert (days to return to baseline)
+
+  This is important because it determines whether the operator
+  created durable value or temporary performance.
+
+
+================================================================================
+OUTPUTS
+================================================================================
+
+TAB 1: OVERVIEW
+
+  Top KPIs:
+  - Value Created (FCF delta over engagement)
+  - Operator Total Earned
+  - Client Net Gain
+  - Client ROI (at engagement end)
+  - Client Lifetime ROI (including post-engagement tail)
+  - Equity Delta
+  - ROI Break-Even Day
+
+  Charts:
+  - FCF: before vs after vs after-fees (3 lines)
+  - Active customers: before vs after
+  - Client cumulative net gain over time
+  - ROI curve over time (with break-even marked)
+
+TAB 2: CLIENT VIEW
+
+  Side-by-side metric comparison (before vs after)
+  Monthly P&L: what the client pays, what they get
+  Equity value before vs after
+  Plain-English summary
+
+TAB 3: OPERATOR VIEW
+
+  Earnings breakdown by source (retainer, rev share, per-event, bonuses)
+  Cumulative earnings curve
+  Effective rate per customer acquired
+  Effective hourly rate (if hours input is provided)
+  Monthly earnings profile (ramp up as customers accumulate)
+
+  Portfolio view (if operator runs multiple clients):
+  - Input: number of simultaneous clients
+  - Total monthly income = per-client earnings × clients
+  - Shows what a book of 5/10/20 clients looks like
+
+TAB 4: DEAL FINDER
+
+  Two modes:
+
+  Mode A: Revenue Share Sweep
+    Fix retainer + bonuses. Sweep rev share from 0-50%.
+    Chart: operator earned vs client net gain at each level.
+    Find the sweet spot given client's minimum ROI target.
+
+  Mode B: Deal Structure Comparison
+    Compare up to 4 different deal structures side by side:
+    - Structure 1: $5K retainer + 10% rev share (6 months)
+    - Structure 2: $3K retainer + 15% rev share (lifetime)
+    - Structure 3: $0 retainer + $500 per close
+    - Structure 4: $2K retainer + phased rev share (20/15/10/5%)
+
+    For each: operator earned, client net gain, client ROI, break-even day
+    Shows which structure is best for each party and where the compromise is.
+
+TAB 5: ROI TIMELINE
+
+  The full ROI-over-time chart with annotations:
+  - ROI break-even day (vertical line)
+  - Engagement end (vertical line)
+  - ROI at 6 months, 12 months, 24 months (callouts)
+  - Post-engagement value zone (shaded area showing value that
+    accrues after the operator leaves)
+
+  Table: monthly ROI progression
+    Month 1: -100% (paying retainer, no results yet)
+    Month 3: -40% (early results coming in)
+    Month 6: +50% (break-even crossed)
+    Month 12: +300% (compounding retention)
+    Month 24: +800% (long-tail value)
+
+TAB 6: CALCULATIONS
+
+  Full audit trail, same philosophy as Model 1:
+  - Before metrics → before simulation → before FCF
+  - After metrics → after simulation → after FCF
+  - Delta computation
+  - Deal structure → operator earnings per day
+  - Client net gain per day
+  - ROI computation
+  All traceable, all verifiable.
+
+
+================================================================================
+EDGE CASES AND DESIGN DECISIONS
+================================================================================
+
+1. OPERATOR IMPROVES NOTHING
+   If after = before, value_created = 0, operator still earns retainer.
+   Client ROI = -100%. The model should clearly show this.
+
+2. OPERATOR MAKES THINGS WORSE
+   If after is worse than before (e.g., spammy outbound burns the list),
+   value_created is negative. Client ROI is deeply negative. The model
+   should handle negative deltas gracefully.
+
+3. RAMP PERIOD
+   During ramp, metrics interpolate linearly from before to after.
+   This means the first ramp_duration days show gradually improving
+   performance, not a step change. Revenue attribution during ramp
+   should be pro-rated.
+
+4. CUSTOMER ATTRIBUTION
+   The rev share is on the DELTA (default) — the incremental revenue
+   above what the client would have generated anyway. This is fair
+   because the operator only earns on value they created.
+   
+   Alternative: rev share on ALL new customer revenue. Simpler but
+   the operator earns on customers that would have come anyway.
+   
+   The model should support both. Let the user choose.
+
+5. RETAINED CUSTOMERS AFTER ENGAGEMENT
+   If engagement is 12 months but simulation is 7 years, customers
+   acquired during the engagement continue generating revenue for
+   years after. Who "owns" that value?
+   
+   - If rev share is "lifetime": operator keeps earning (long-tail income)
+   - If rev share is "fixed_months": operator stops at the cap
+   - If rev share is "first_payment": operator already collected
+   
+   The model must track customer-level attribution to compute this
+   correctly. Each customer acquired during the engagement should be
+   tagged, and rev share applied to their specific revenue stream.
+
+6. MULTIPLE OPERATORS
+   Not in scope for V1. But the architecture should not prevent
+   modeling multiple operators on the same client (e.g., one for
+   outbound, one for content).
+
+
+================================================================================
+IMPLEMENTATION PRIORITY
+================================================================================
+
+V1 (build now):
+  - Full Model 1 inputs for before state
+  - Metric overrides for after state with ramp logic
+  - Deal models: retainer + rev share (with duration/phased options) +
+    pay per close + performance bonus
+  - ROI over time curve with break-even
+  - Deal Finder with rev share sweep
+  - Full calculation audit trail
+
+V2 (build later):
+  - Pay per qualified call / show / activation
+  - Phased rev share with custom schedule
+  - Per-customer attribution for lifetime rev share
+  - Post-engagement metric decay
+  - Deal structure comparison (4-way)
+  - Portfolio view for operators
+  - Equity share settlement modeling

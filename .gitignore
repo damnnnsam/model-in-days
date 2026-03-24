@@ -1,5 +1,11 @@
 __pycache__/
 *.pyc
+*.pyo
 .streamlit/
+.claude/
 tmp_audio/
+logs/
+*.log
+*.err
+.DS_Store
 current_model.json
