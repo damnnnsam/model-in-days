@@ -122,11 +122,6 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = N
     ebitda_margin = (trailing_ebitda / trailing_revenue * 100) if trailing_revenue > 0 else 0
     net_margin = (trailing_ni / trailing_revenue * 100) if trailing_revenue > 0 else 0
 
-    monthly_rev = float(np.sum(sim.revenue_total[start:end]))
-    monthly_cash = trailing_revenue
-    monthly_fcf = float(np.sum(adj_fcf[start:end]))
-    monthly_new = float(np.sum(sim.new_customers_total[start:end]))
-
     # ── Adjust for operator costs if provided ──────────────────────
     T_full = len(sim.days)
     if operator_cost_daily is not None:
@@ -140,6 +135,11 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = N
         adj_fcf = sim.free_cash_flow[:T_full]
         adj_cumulative_fcf = sim.cumulative_fcf[:T_full]
         adj_cash_balance = sim.cash_balance
+
+    monthly_rev = float(np.sum(sim.revenue_total[start:end]))
+    monthly_cash = trailing_revenue
+    monthly_fcf = float(np.sum(adj_fcf[start:end]))
+    monthly_new = float(np.sum(sim.new_customers_total[start:end]))
 
     # ── Time to profitability (simulation-wide, not cursor-scoped) ──
     # Find the last day cumulative FCF is negative. The day after that
