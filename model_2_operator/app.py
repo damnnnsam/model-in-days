@@ -635,7 +635,11 @@ with tab_client:
     st.markdown("### What the client gets")
 
     kpis_b = compute_kpis(inp_before, sim_before)
-    kpis_a = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
+    try:
+        kpis_a = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
+    except TypeError as e:
+        st.error(f"DEBUG compute_kpis TypeError: {e}")
+        kpis_a = compute_kpis(inp_after, sim_after)
 
     comparison = pd.DataFrame({
         "Metric": [
@@ -1090,7 +1094,11 @@ with tab_calc:
 # ---------- Tab: Comp Structure (output only — inputs in sidebar) ----------
 # Compute business health KPIs for both states
 _kpis_before = compute_kpis(inp_before, sim_before)
-_kpis_after = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
+try:
+    _kpis_after = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
+except TypeError as e:
+    import traceback; traceback.print_exc()
+    _kpis_after = compute_kpis(inp_after, sim_after)
 
 with tab_comp:
     st.markdown("### Compensation Structure")
