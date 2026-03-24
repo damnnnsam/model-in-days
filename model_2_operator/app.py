@@ -541,6 +541,18 @@ tab_overview, tab_client, tab_operator, tab_finder, tab_roi, tab_calc, tab_comp,
      "Comp Structure", "Compare Structures", "Comp Sensitivity"]
 )
 
+# ── Run compensation engine from sidebar inputs ─────────────────────
+comp_result = compute_compensation(active_comp, sim_after, inp_after)
+
+# Convert monthly operator compensation to a daily array for KPI adjustment
+_T_sim = len(sim_after.days)
+_op_cost_daily = np.zeros(_T_sim)
+for _m in range(comp_result.n_months):
+    _s, _e = _m * 30, min((_m + 1) * 30, _T_sim)
+    _days_in_month = _e - _s
+    if _days_in_month > 0:
+        _op_cost_daily[_s:_e] = comp_result.total_compensation[_m] / _days_in_month
+
 # ---------- Tab: Overview ----------
 with tab_overview:
     x = np.arange(T)
@@ -1075,20 +1087,7 @@ with tab_calc:
     )
 
 
-# ── Run compensation engine from sidebar inputs ─────────────────────
-comp_result = compute_compensation(active_comp, sim_after, inp_after)
-
-
 # ---------- Tab: Comp Structure (output only — inputs in sidebar) ----------
-# Convert monthly operator compensation to a daily array for KPI adjustment
-_T_sim = len(sim_after.days)
-_op_cost_daily = np.zeros(_T_sim)
-for _m in range(comp_result.n_months):
-    _s, _e = _m * 30, min((_m + 1) * 30, _T_sim)
-    _days_in_month = _e - _s
-    if _days_in_month > 0:
-        _op_cost_daily[_s:_e] = comp_result.total_compensation[_m] / _days_in_month
-
 # Compute business health KPIs for both states
 _kpis_before = compute_kpis(inp_before, sim_before)
 _kpis_after = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
