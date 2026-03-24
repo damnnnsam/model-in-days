@@ -43,7 +43,8 @@ class KPIMetrics:
     time_to_self_fund_months: int
 
 
-def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = None) -> KPIMetrics:
+def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = None,
+                  operator_cost_daily: np.ndarray | None = None) -> KPIMetrics:
     T = len(sim.days)
     end = min(at_day, T) if at_day is not None else T
     trail = min(30, end)
@@ -123,16 +124,29 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = N
 
     monthly_rev = float(np.sum(sim.revenue_total[start:end]))
     monthly_cash = trailing_revenue
-    monthly_fcf = float(np.sum(sim.free_cash_flow[start:end]))
+    monthly_fcf = float(np.sum(adj_fcf[start:end]))
     monthly_new = float(np.sum(sim.new_customers_total[start:end]))
+
+    # ── Adjust for operator costs if provided ──────────────────────
+    T_full = len(sim.days)
+    if operator_cost_daily is not None:
+        op_cost = operator_cost_daily[:T_full]
+        adj_fcf = sim.free_cash_flow[:T_full] - op_cost
+        adj_cumulative_fcf = np.cumsum(adj_fcf)
+        adj_cash_balance = sim.cash_balance.copy()
+        cum_op = np.cumsum(op_cost)
+        adj_cash_balance[:T_full] -= cum_op
+    else:
+        adj_fcf = sim.free_cash_flow[:T_full]
+        adj_cumulative_fcf = sim.cumulative_fcf[:T_full]
+        adj_cash_balance = sim.cash_balance
 
     # ── Time to profitability (simulation-wide, not cursor-scoped) ──
     # Find the last day cumulative FCF is negative. The day after that
     # is when the business is sustainably profitable (stays positive).
-    T_full = len(sim.days)
     last_negative_day = -1
     for d in range(T_full):
-        if sim.cumulative_fcf[d] < 0:
+        if adj_cumulative_fcf[d] < 0:
             last_negative_day = d
     if last_negative_day == -1:
         ttp_days = 0
@@ -143,7 +157,7 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = N
     ttp_months = max(1, round(ttp_days / 30)) if ttp_days < T_full else -1
 
     # ── Cash consumption (simulation-wide) ────────────────────────
-    min_cash = float(np.min(sim.cash_balance[:T_full]))
+    min_cash = float(np.min(adj_cash_balance[:T_full]))
     cash_consumption = abs(min(min_cash, 0))
     cash_needed = max(-min_cash, 0)
 
@@ -174,11 +188,11 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: int | None = N
     # ── Time to self-fund ────────────────────────────────────────────
     # First day cash balance crosses from negative to positive
     ttsf_days = T_full
-    if sim.cash_balance[0] >= 0:
+    if adj_cash_balance[0] >= 0:
         ttsf_days = 0
     else:
         for d in range(1, T_full):
-            if sim.cash_balance[d] >= 0 and sim.cash_balance[d - 1] < 0:
+            if adj_cash_balance[d] >= 0 and adj_cash_balance[d - 1] < 0:
                 ttsf_days = d
                 break
     ttsf_months = max(1, round(ttsf_days / 30)) if ttsf_days < T_full else -1

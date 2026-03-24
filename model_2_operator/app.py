@@ -623,7 +623,7 @@ with tab_client:
     st.markdown("### What the client gets")
 
     kpis_b = compute_kpis(inp_before, sim_before)
-    kpis_a = compute_kpis(inp_after, sim_after)
+    kpis_a = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
 
     comparison = pd.DataFrame({
         "Metric": [
@@ -722,31 +722,6 @@ with tab_operator:
     fig_break.update_layout(title="Earnings Breakdown (Cumulative, Stacked)", **DAILY_LAYOUT)
     st.plotly_chart(fig_break, use_container_width=True)
 
-    st.markdown("### Portfolio Projection")
-    st.caption("What your income looks like with multiple clients on this deal structure.")
-    pc1, pc2 = st.columns(2)
-    n_clients = pc1.slider("Simultaneous clients", 1, 20, 5, key="n_clients")
-    hours_per_client = int(pc2.number_input("Hours/month per client", value=20, step=5, key="hrs_per"))
-
-    monthly_total = result.monthly_earnings_avg * n_clients
-    total_hours = hours_per_client * n_clients
-    hourly_rate = monthly_total / max(total_hours, 1)
-
-    p1, p2, p3 = st.columns(3)
-    p1.metric("Monthly Income", _fd(monthly_total))
-    p2.metric("Annual Income", _fd(monthly_total * 12))
-    p3.metric("Effective $/hr", _fd(hourly_rate))
-
-    portfolio_data = []
-    for n in [1, 3, 5, 10, 15, 20]:
-        m_inc = result.monthly_earnings_avg * n
-        portfolio_data.append({
-            "Clients": n,
-            "Monthly": _fd(m_inc),
-            "Annual": _fd(m_inc * 12),
-            "Eff $/hr": _fd(m_inc / max(hours_per_client * n, 1)),
-        })
-    st.dataframe(pd.DataFrame(portfolio_data), use_container_width=True, hide_index=True)
 
 
 # ---------- Tab: Deal Finder ----------
@@ -1105,9 +1080,18 @@ comp_result = compute_compensation(active_comp, sim_after, inp_after)
 
 
 # ---------- Tab: Comp Structure (output only — inputs in sidebar) ----------
+# Convert monthly operator compensation to a daily array for KPI adjustment
+_T_sim = len(sim_after.days)
+_op_cost_daily = np.zeros(_T_sim)
+for _m in range(comp_result.n_months):
+    _s, _e = _m * 30, min((_m + 1) * 30, _T_sim)
+    _days_in_month = _e - _s
+    if _days_in_month > 0:
+        _op_cost_daily[_s:_e] = comp_result.total_compensation[_m] / _days_in_month
+
 # Compute business health KPIs for both states
 _kpis_before = compute_kpis(inp_before, sim_before)
-_kpis_after = compute_kpis(inp_after, sim_after)
+_kpis_after = compute_kpis(inp_after, sim_after, operator_cost_daily=_op_cost_daily)
 
 with tab_comp:
     st.markdown("### Compensation Structure")
