@@ -233,10 +233,10 @@ def _render_model_tree(nodes: list[dict], depth: int) -> str | None:
     """Render model tree in sidebar. Returns slug of clicked model or None."""
     selected = None
     for node in nodes:
-        indent = "  " * depth
-        prefix = "▸ " if node["children"] else "  "
-        label = f"{indent}{prefix}{node['name']}"
-        if st.sidebar.button(label, key=f"nav_model_{node['slug']}"):
+        indent = "› " * depth
+        base_tag = "" if node["base"] else " (base)"
+        label = f"{indent}{node['name']}{base_tag}"
+        if st.sidebar.button(label, key=f"nav_model_{node['slug']}", use_container_width=True):
             selected = node["slug"]
         child_sel = _render_model_tree(node["children"], depth + 1)
         if child_sel:
