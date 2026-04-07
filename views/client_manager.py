@@ -313,6 +313,27 @@ def render_client_overview(client_slug: str) -> None:
     if import_submitted and import_url and import_name:
         _do_import(client_slug, import_url, import_name)
 
+    # ── Import from Google Sheets ─────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Import from Google Sheets")
+    st.caption("Paste a Google Sheets URL to import model inputs. The sheet must have Parameter and Value columns.")
+
+    with st.form("import_sheets_form"):
+        sheets_url = st.text_input("Google Sheets URL", placeholder="https://docs.google.com/spreadsheets/d/...")
+        sheets_name = st.text_input("Save as model name", placeholder="Imported from Sheets")
+        sheets_submitted = st.form_submit_button("Import from Sheets")
+
+    if sheets_submitted and sheets_url and sheets_name:
+        try:
+            from sheets.google_sheets import import_model_from_sheets
+            inp = import_model_from_sheets(sheets_url)
+            slug = _slugify(sheets_name)
+            create_base_model(client_slug, slug, sheets_name, inp, description="Imported from Google Sheets")
+            st.success(f"Imported as base model: **{sheets_name}**")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Import failed: {e}")
+
 
 def _do_import(client_slug: str, url_or_param: str, name: str) -> None:
     """Import a model from an old URL-encoded string."""

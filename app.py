@@ -284,6 +284,18 @@ elif view == "model":
 
         render_model_view(edited_inp, model_name=model_slug)
 
+        # ── Export to Google Sheets ──
+        st.divider()
+        if st.button("Export to Google Sheets", key=f"sheets_export_{model_slug}"):
+            try:
+                with st.spinner("Creating spreadsheet with live formulas..."):
+                    from sheets.google_sheets import export_model_to_sheets
+                    url = export_model_to_sheets(edited_inp, name=mf.name)
+                st.success("Spreadsheet created!")
+                st.markdown(f"[Open in Google Sheets]({url})")
+            except Exception as e:
+                st.error(f"Export failed: {e}")
+
 
 # ── New Model ──────────────────────────────────────────────────────────
 
@@ -411,6 +423,40 @@ elif view == "deal":
             st.rerun()
 
         render_deal_view(inp_before, inp_after, edited_comp, edited_eng)
+
+        # ── Export Deal to Google Sheets ──
+        st.divider()
+        if st.button("Export Deal to Google Sheets", key=f"sheets_deal_{deal_slug}"):
+            try:
+                with st.spinner("Creating deal spreadsheet with live formulas..."):
+                    from sheets.google_sheets import export_deal_to_sheets
+                    from engine.simulation import run_simulation
+                    from engine.valuation import compute_valuation
+
+                    sim_b = run_simulation(inp_before)
+                    sim_a = run_simulation(inp_after)
+                    val_b = compute_valuation(inp_before, sim_b)
+                    val_a = compute_valuation(inp_after, sim_a)
+
+                    summary = {
+                        "Equity Value Before (DCF)": val_b.equity_value_dcf,
+                        "Equity Value After (DCF)": val_a.equity_value_dcf,
+                        "Equity Delta": val_a.equity_value_dcf - val_b.equity_value_dcf,
+                        "Share Price Before": val_b.share_price_dcf,
+                        "Share Price After": val_a.share_price_dcf,
+                    }
+
+                    url = export_deal_to_sheets(
+                        inp_before, inp_after,
+                        comp_structure_to_dict(edited_comp),
+                        edited_eng,
+                        deal_name=deal_file.name,
+                        summary=summary,
+                    )
+                st.success("Deal spreadsheet created!")
+                st.markdown(f"[Open in Google Sheets]({url})")
+            except Exception as e:
+                st.error(f"Export failed: {e}")
 
 
 # ── New Deal ───────────────────────────────────────────────────────────
