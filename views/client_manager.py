@@ -10,7 +10,7 @@ import re
 import streamlit as st
 
 from store.client import list_clients, create_client, load_client_meta, save_client_meta, ClientMeta
-from store.model import list_models, get_model_tree, load_model_file, delete_model
+from store.model import list_models, get_model_tree, load_model_file, delete_model, create_base_model
 from store.deal import list_deals, delete_deal
 
 
@@ -174,3 +174,83 @@ def render_client_overview(client_slug: str) -> None:
                     st.rerun()
     else:
         st.info("No deals yet. Create a deal to connect two models with a compensation structure.")
+
+    # ── Import from URL ────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Import from URL")
+    st.caption("Paste a shared model URL (with `?m=...` or `?d=...` parameter) to import it as a new base model.")
+
+    with st.form("import_url_form"):
+        import_url = st.text_input("URL or encoded parameter", placeholder="https://...?m=eNpt... or just the encoded string")
+        import_name = st.text_input("Save as model name", placeholder="Imported Model")
+        import_submitted = st.form_submit_button("Import")
+
+    if import_submitted and import_url and import_name:
+        _do_import(client_slug, import_url, import_name)
+
+
+def _do_import(client_slug: str, url_or_param: str, name: str) -> None:
+    """Import a model from an old URL-encoded string."""
+    import base64
+    import json
+    import zlib
+    from urllib.parse import urlparse, parse_qs
+
+    # Extract the encoded parameter from a full URL or bare string
+    encoded = url_or_param.strip()
+    if "?" in encoded:
+        parsed = urlparse(encoded)
+        params = parse_qs(parsed.query)
+        if "m" in params:
+            encoded = params["m"][0]
+        elif "d" in params:
+            encoded = params["d"][0]
+        else:
+            st.error("URL has no `?m=` or `?d=` parameter.")
+            return
+
+    # Try to decode as Model 1 format (?m= → ModelInputs)
+    try:
+        compressed = base64.urlsafe_b64decode(encoded)
+        data = json.loads(zlib.decompress(compressed).decode())
+    except Exception as e:
+        st.error(f"Could not decode: {e}")
+        return
+
+    # Check if it's a Model 1 format (dict with ModelInputs fields)
+    from engine.inputs import ModelInputs
+    from dataclasses import fields as dc_fields
+    model_fields = {f.name for f in dc_fields(ModelInputs)}
+
+    if any(k in model_fields for k in data.keys()):
+        # Model 1 format — direct ModelInputs dict
+        from store.serialization import dict_to_model_inputs
+        try:
+            inp = dict_to_model_inputs(data)
+        except Exception as e:
+            st.error(f"Could not parse ModelInputs: {e}")
+            return
+        slug = _slugify(name)
+        create_base_model(client_slug, slug, name, inp, description="Imported from URL")
+        st.success(f"Imported as base model: **{name}**")
+        st.rerun()
+
+    elif any(k.startswith(("b_", "a_", "sb_", "d_")) for k in data.keys()):
+        # Model 2 format — session state dict with prefixed keys
+        # Extract "before" state as a base model
+        before_fields = {k[2:]: v for k, v in data.items() if k.startswith("b_")}
+        if before_fields:
+            # Map widget keys back to ModelInputs fields where possible
+            from store.serialization import dict_to_model_inputs
+            try:
+                inp = dict_to_model_inputs(before_fields)
+            except Exception:
+                inp = ModelInputs()  # fallback to defaults
+            slug = _slugify(name)
+            create_base_model(client_slug, slug, name, inp, description="Imported from deal URL (before state)")
+            st.success(f"Imported before-state as base model: **{name}**")
+            st.rerun()
+        else:
+            st.error("Could not extract model data from deal URL.")
+    else:
+        st.error("Unrecognized data format.")

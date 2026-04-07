@@ -40,10 +40,67 @@ from views.deal_builder import render_deal_view
 from views.deal_comparison import render_deal_comparison
 
 
+# ── URL Parameter Handling ─────────────────────────────────────────────
+
+def _read_url_nav() -> dict | None:
+    """Read navigation state from URL query parameters."""
+    params = st.query_params
+    client = params.get("client")
+    if not client:
+        return None
+    model = params.get("model")
+    deal = params.get("deal")
+    compare = params.get("compare")
+    if deal:
+        return {"view": "deal", "client": client, "deal": deal}
+    if compare:
+        return {"view": "compare", "client": client, "deals": compare.split(",")}
+    if model:
+        return {"view": "model", "client": client, "model": model}
+    return {"view": "client_overview", "client": client}
+
+
+def _sync_url(nav: dict) -> None:
+    """Update URL query parameters to reflect current navigation."""
+    view = nav.get("view")
+    if view == "model":
+        st.query_params.update({"client": nav["client"], "model": nav["model"]})
+    elif view == "deal":
+        st.query_params.update({"client": nav["client"], "deal": nav["deal"]})
+    elif view == "compare":
+        st.query_params.update({"client": nav["client"], "compare": ",".join(nav.get("deals", []))})
+    elif view == "client_overview":
+        st.query_params.update({"client": nav["client"]})
+    else:
+        st.query_params.clear()
+
+
+# On first load, check URL params before rendering sidebar
+_url_nav = None
+if "url_loaded" not in st.session_state:
+    _url_nav = _read_url_nav()
+    if _url_nav:
+        st.session_state["url_loaded"] = True
+        # Pre-set the client selector to match URL
+        clients = list_clients()
+        client_slugs = [slug for slug, _ in clients]
+        if _url_nav.get("client") in client_slugs:
+            st.session_state["nav_client"] = client_slugs.index(_url_nav["client"]) + 1
+
 # ── Sidebar Navigation ────────────────────────────────────────────────
 
 nav = render_sidebar_navigation()
 view = nav.get("view", "home")
+
+# If URL specified a deeper target (model/deal), override sidebar nav
+if _url_nav and _url_nav.get("view") in ("model", "deal", "compare"):
+    if _url_nav.get("client") == nav.get("client"):
+        nav = _url_nav
+        view = nav["view"]
+    _url_nav = None
+
+# Sync URL to current nav state
+_sync_url(nav)
 
 
 # ── Home ───────────────────────────────────────────────────────────────
@@ -97,12 +154,16 @@ elif view == "model":
 
         edited_inp = _render_model_inputs_editor(inp, prefix=f"edit_{model_slug}")
 
-        if st.sidebar.button("Save Changes", key=f"save_{model_slug}"):
+        # Unsaved changes detection
+        has_changes = compute_overrides(inp, edited_inp)
+        if has_changes:
+            st.sidebar.warning(f"Unsaved changes ({len(has_changes)} fields)")
+
+        save_label = "Save Changes" if not has_changes else f"Save Changes ({len(has_changes)})"
+        if st.sidebar.button(save_label, key=f"save_{model_slug}", disabled=not has_changes):
             if mf.base is None:
-                # Base model — save full inputs
                 mf.inputs = model_inputs_to_dict(edited_inp)
             else:
-                # Layered model — compute new overrides vs parent
                 parent_inp = resolve_model(client_slug, mf.base)
                 mf.overrides = compute_overrides(parent_inp, edited_inp)
             save_model(client_slug, model_slug, mf)
@@ -177,7 +238,17 @@ elif view == "deal":
         edited_comp = _render_comp_editor(comp, prefix=f"deal_{deal_slug}")
         edited_eng = _render_engagement_editor(eng, prefix=f"deal_{deal_slug}")
 
-        if st.sidebar.button("Save Deal", key=f"save_deal_{deal_slug}"):
+        # Unsaved changes detection
+        saved_comp = comp_structure_to_dict(comp)
+        current_comp = comp_structure_to_dict(edited_comp)
+        comp_changed = saved_comp != current_comp
+        eng_changed = eng != edited_eng
+        has_deal_changes = comp_changed or eng_changed
+
+        if has_deal_changes:
+            st.sidebar.warning("Unsaved changes")
+
+        if st.sidebar.button("Save Deal", key=f"save_deal_{deal_slug}", disabled=not has_deal_changes):
             deal_file.compensation = comp_structure_to_dict(edited_comp)
             deal_file.engagement = edited_eng
             save_deal(client_slug, deal_slug, deal_file)
