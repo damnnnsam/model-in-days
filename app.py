@@ -38,6 +38,7 @@ from views.client_manager import render_sidebar_navigation, render_client_overvi
 from views.model_viewer import render_model_view
 from views.deal_builder import render_deal_view
 from views.deal_comparison import render_deal_comparison
+from views.wizard import render_wizard
 
 
 # ── Helper: Model Inputs Editor ────────────────────────────────────────
@@ -477,3 +478,10 @@ elif view == "compare":
     client_slug = nav["client"]
     deal_slugs = nav.get("deals", [])
     render_deal_comparison(client_slug, deal_slugs)
+
+
+# ── Wizard ─────────────────────────────────────────────────────────────
+
+elif view == "wizard":
+    client_slug = nav["client"]
+    render_wizard(client_slug)
