@@ -109,20 +109,18 @@ def _render_breadcrumb_mode(client_slug: str, client_name: str,
             current_idx = i
             break
 
-    col1, col2 = st.sidebar.columns([3, 1])
-    with col1:
-        new_idx = st.selectbox(
-            "Switch", range(len(all_items)),
-            format_func=lambda i: all_items[i][2],
-            index=current_idx,
-            key="nav_switch",
-            label_visibility="collapsed",
-        )
-    with col2:
-        if st.button("Back", key="nav_back"):
-            st.session_state.pop("active_model", None)
-            st.session_state.pop("active_deal", None)
-            st.rerun()
+    if st.sidebar.button("← Back to overview", key="nav_back", use_container_width=True):
+        st.session_state.pop("active_model", None)
+        st.session_state.pop("active_deal", None)
+        st.rerun()
+
+    new_idx = st.sidebar.selectbox(
+        "Switch", range(len(all_items)),
+        format_func=lambda i: all_items[i][2],
+        index=current_idx,
+        key="nav_switch",
+        label_visibility="collapsed",
+    )
 
     # Handle switch
     typ, slug, _ = all_items[new_idx]
