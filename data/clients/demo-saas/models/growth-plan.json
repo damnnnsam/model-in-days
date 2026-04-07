@@ -1,0 +1,14 @@
+{
+  "name": "Operator Growth Plan",
+  "description": "Improved outbound (3x reply rate, better lead conv, lower churn)",
+  "base": "baseline",
+  "inputs": null,
+  "overrides": {
+    "outbound_conversion_rate": 0.5,
+    "lead_conversion_rate_outbound": 12.0,
+    "contacts_per_month": 3000,
+    "churn_rate": 35.0
+  },
+  "created": "2026-04-07T16:50:24",
+  "modified": "2026-04-07T16:50:24"
+}
