@@ -43,7 +43,7 @@ def _slugify(name: str) -> str:
 
 def render_wizard(client_slug: str) -> None:
     """Render the 3-step deal wizard."""
-    st.markdown("## New Deal Wizard")
+    st.markdown("## New Engagement")
 
     # Step tracker
     if "wiz_step" not in st.session_state:
@@ -51,8 +51,8 @@ def render_wizard(client_slug: str) -> None:
 
     step = st.session_state["wiz_step"]
 
-    # Progress bar
-    st.progress(step / 3, text=f"Step {step} of 3")
+    steps = {1: "Current State", 2: "Target State", 3: "Compensation"}
+    st.progress(step / 3, text=f"Step {step}/3 — {steps[step]}")
 
     if step == 1:
         _step_1_baseline(client_slug)
@@ -65,8 +65,8 @@ def render_wizard(client_slug: str) -> None:
 # ── Step 1: Model the business as-is ──────────────────────────────────
 
 def _step_1_baseline(client_slug: str) -> None:
-    st.markdown("### Step 1: Model the business as it is today")
-    st.caption("Enter the client's current metrics. The dashboard updates live as you type.")
+    st.markdown("### Step 1: Current State Assessment")
+    st.caption("Capture the client's baseline operating metrics. The valuation updates live.")
 
     # Sidebar inputs
     inp = _render_full_model_inputs(prefix="wiz_b")
@@ -88,12 +88,12 @@ def _step_1_baseline(client_slug: str) -> None:
 
     # Save & continue
     st.sidebar.markdown("---")
-    name = st.sidebar.text_input("Model name", value="Current State", key="wiz_b_name")
+    name = st.sidebar.text_input("Baseline name", value="Current State", key="wiz_b_name")
 
     if st.sidebar.button("Save & Continue →", key="wiz_b_save", type="primary"):
         slug = _slugify(name)
         create_base_model(client_slug, slug, name, inp,
-                         description="Baseline model (wizard step 1)")
+                         description="Baseline — current state assessment")
         st.session_state["wiz_base_slug"] = slug
         st.session_state["wiz_step"] = 2
         st.rerun()
@@ -110,8 +110,8 @@ def _step_2_improvements(client_slug: str) -> None:
             st.rerun()
         return
 
-    st.markdown("### Step 2: Model the improvements")
-    st.caption("Adjust the metrics the operator will improve. Changes are highlighted against the baseline.")
+    st.markdown("### Step 2: Target State & Value Creation")
+    st.caption("Define the operational improvements. Deltas against the baseline are tracked automatically.")
 
     # Load baseline
     inp_before = resolve_model(client_slug, base_slug)
@@ -154,7 +154,7 @@ def _step_2_improvements(client_slug: str) -> None:
 
     # Navigation
     st.sidebar.markdown("---")
-    name = st.sidebar.text_input("Improvement name", value="Growth Plan", key="wiz_a_name")
+    name = st.sidebar.text_input("Target state name", value="Target State", key="wiz_a_name")
 
     col1, col2 = st.sidebar.columns(2)
     with col1:
@@ -165,7 +165,7 @@ def _step_2_improvements(client_slug: str) -> None:
         if st.button("Save & Continue →", key="wiz_a_save", type="primary", disabled=not overrides):
             slug = _slugify(name)
             create_layered_model(client_slug, slug, name, base_slug, overrides,
-                               description="Improvement model (wizard step 2)")
+                               description="Target state — projected improvements")
             st.session_state["wiz_after_slug"] = slug
             st.session_state["wiz_step"] = 3
             st.rerun()
@@ -183,8 +183,8 @@ def _step_3_compensation(client_slug: str) -> None:
             st.rerun()
         return
 
-    st.markdown("### Step 3: How does the operator get paid?")
-    st.caption("Configure the compensation structure. The deal economics update live.")
+    st.markdown("### Step 3: Compensation Structure")
+    st.caption("Define the fee structure. Deal economics and client ROI update live.")
 
     inp_before = resolve_model(client_slug, base_slug)
     inp_after = resolve_model(client_slug, after_slug)
@@ -311,7 +311,7 @@ def _step_3_compensation(client_slug: str) -> None:
 
     # Save
     st.sidebar.markdown("---")
-    deal_name = st.sidebar.text_input("Deal name", value="Standard Deal", key="wiz_c_name")
+    deal_name = st.sidebar.text_input("Engagement name", value="Engagement Proposal", key="wiz_c_name")
 
     col1, col2 = st.sidebar.columns(2)
     with col1:
@@ -319,7 +319,7 @@ def _step_3_compensation(client_slug: str) -> None:
             st.session_state["wiz_step"] = 2
             st.rerun()
     with col2:
-        if st.button("Save Deal ✓", key="wiz_c_save", type="primary"):
+        if st.button("Finalize Engagement", key="wiz_c_save", type="primary"):
             deal_slug = _slugify(deal_name)
             deal_file = DealFile(
                 name=deal_name,

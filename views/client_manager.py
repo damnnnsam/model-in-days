@@ -175,7 +175,7 @@ def _render_full_nav(client_slug: str, client_name: str) -> dict:
     if st.sidebar.button("+ New Deal", key="nav_new_deal"):
         return {"view": "new_deal", "client": client_slug}
 
-    if st.sidebar.button("Build Deal (Wizard)", key="nav_wizard", type="primary"):
+    if st.sidebar.button("New Engagement", key="nav_wizard", type="primary"):
         return {"view": "wizard", "client": client_slug}
 
     # Compare
