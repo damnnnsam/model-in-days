@@ -1,7 +1,7 @@
 """
 Client and model management UI.
 
-Renders in the sidebar: client picker, model tree, create/edit buttons.
+Renders in the sidebar: client picker, model tree (or breadcrumb when inside a model/deal).
 Renders in the main area: client overview when no model/deal is selected.
 """
 from __future__ import annotations
@@ -25,56 +25,129 @@ def render_sidebar_navigation() -> dict:
     """
     Render client/model/deal navigation in the sidebar.
 
-    Returns a dict describing the current selection:
-      {"view": "home"}
-      {"view": "model", "client": slug, "model": slug}
-      {"view": "deal", "client": slug, "deal": slug}
-      {"view": "compare", "client": slug, "deals": [slug, ...]}
-      {"view": "new_model", "client": slug, "base": slug|None}
-      {"view": "new_deal", "client": slug}
+    When a model or deal is active, navigation collapses to a breadcrumb
+    so sidebar space is used for inputs.
     """
-    st.sidebar.title("Financial Modeling")
-
     # ── Client selector ────────────────────────────────────────────
     clients = list_clients()
-    client_names = ["— Select Client —"] + [f"{meta.name}" for _, meta in clients]
+    client_names = ["— Select Client —"] + [meta.name for _, meta in clients]
     client_slugs = [None] + [slug for slug, _ in clients]
 
     selected_idx = st.sidebar.selectbox(
         "Client", range(len(client_names)),
         format_func=lambda i: client_names[i],
         key="nav_client",
+        label_visibility="collapsed",
     )
+
+    if selected_idx == 0 or selected_idx is None:
+        # No client selected — show new client button
+        if st.sidebar.button("+ New Client", key="nav_new_client_home"):
+            st.session_state["show_new_client"] = True
+        if st.session_state.get("show_new_client"):
+            _render_new_client_form(client_slugs)
+        return {"view": "home"}
+
+    client_slug = client_slugs[selected_idx]
+    client_meta = load_client_meta(client_slug)
+    client_name = client_meta.name if client_meta else client_slug
+
+    # ── Check if we're inside a model or deal ──────────────────────
+    active_model = st.session_state.get("active_model")
+    active_deal = st.session_state.get("active_deal")
+
+    # If active, render breadcrumb mode (compact)
+    if active_model or active_deal:
+        return _render_breadcrumb_mode(client_slug, client_name, active_model, active_deal)
+
+    # Otherwise, render full navigation tree
+    return _render_full_nav(client_slug, client_name)
+
+
+def _render_breadcrumb_mode(client_slug: str, client_name: str,
+                            active_model: str | None, active_deal: str | None) -> dict:
+    """Compact breadcrumb navigation — 2-3 lines, rest is for inputs."""
+
+    if active_model:
+        mf = load_model_file(client_slug, active_model)
+        item_name = mf.name if mf else active_model
+        label = f"{client_name} > {item_name}"
+    else:
+        from store.deal import load_deal
+        df = load_deal(client_slug, active_deal)
+        item_name = df.name if df else active_deal
+        label = f"{client_name} > {item_name}"
+
+    st.sidebar.caption(label)
+
+    # Quick switch dropdown
+    models = list_models(client_slug)
+    deals = list_deals(client_slug)
+    all_items = (
+        [("model", slug, f"Model: {mf.name}") for slug, mf in models] +
+        [("deal", slug, f"Deal: {df.name}") for slug, df in deals]
+    )
+
+    # Find current index
+    current_key = ("model", active_model) if active_model else ("deal", active_deal)
+    current_idx = 0
+    for i, (typ, slug, _) in enumerate(all_items):
+        if (typ, slug) == current_key:
+            current_idx = i
+            break
+
+    col1, col2 = st.sidebar.columns([3, 1])
+    with col1:
+        new_idx = st.selectbox(
+            "Switch", range(len(all_items)),
+            format_func=lambda i: all_items[i][2],
+            index=current_idx,
+            key="nav_switch",
+            label_visibility="collapsed",
+        )
+    with col2:
+        if st.button("Back", key="nav_back"):
+            st.session_state.pop("active_model", None)
+            st.session_state.pop("active_deal", None)
+            st.rerun()
+
+    # Handle switch
+    typ, slug, _ = all_items[new_idx]
+    if typ == "model" and slug != active_model:
+        st.session_state["active_model"] = slug
+        st.session_state.pop("active_deal", None)
+        st.rerun()
+    elif typ == "deal" and slug != active_deal:
+        st.session_state["active_deal"] = slug
+        st.session_state.pop("active_model", None)
+        st.rerun()
+
+    st.sidebar.markdown("---")
+
+    if active_model:
+        return {"view": "model", "client": client_slug, "model": active_model}
+    else:
+        return {"view": "deal", "client": client_slug, "deal": active_deal}
+
+
+def _render_full_nav(client_slug: str, client_name: str) -> dict:
+    """Full navigation tree — shown when not inside a model/deal."""
 
     # New client button
     if st.sidebar.button("+ New Client", key="nav_new_client"):
         st.session_state["show_new_client"] = True
-
     if st.session_state.get("show_new_client"):
-        with st.sidebar.form("new_client_form"):
-            nc_name = st.text_input("Client Name")
-            nc_industry = st.text_input("Industry", value="")
-            nc_notes = st.text_area("Notes", value="")
-            if st.form_submit_button("Create Client"):
-                if nc_name:
-                    slug = _slugify(nc_name)
-                    create_client(slug, nc_name, nc_industry, nc_notes)
-                    st.session_state["show_new_client"] = False
-                    st.session_state["nav_client"] = len(client_slugs)  # will be stale, rerun
-                    st.rerun()
+        clients = list_clients()
+        client_slugs = [None] + [slug for slug, _ in clients]
+        _render_new_client_form(client_slugs)
 
-    if selected_idx == 0 or selected_idx is None:
-        return {"view": "home"}
-
-    client_slug = client_slugs[selected_idx]
     st.sidebar.markdown("---")
 
-    # ── Model tree ─────────────────────────────────────────────────
+    # ── Models ─────────────────────────────────────────────────────
     st.sidebar.markdown("**Models**")
     tree = get_model_tree(client_slug)
-    selection = _render_model_tree(tree, client_slug, depth=0)
+    model_selection = _render_model_tree(tree, depth=0)
 
-    # New model button
     if st.sidebar.button("+ New Model", key="nav_new_model"):
         return {"view": "new_model", "client": client_slug, "base": None}
 
@@ -91,24 +164,43 @@ def render_sidebar_navigation() -> dict:
     if st.sidebar.button("+ New Deal", key="nav_new_deal"):
         return {"view": "new_deal", "client": client_slug}
 
-    # ── Compare Deals ──────────────────────────────────────────────
+    # Compare
     if len(deals) >= 2:
         st.sidebar.markdown("---")
         if st.sidebar.button("Compare Deals", key="nav_compare"):
             return {"view": "compare", "client": client_slug, "deals": [s for s, _ in deals]}
 
-    # ── Determine what to show ─────────────────────────────────────
+    # ── Handle clicks ──────────────────────────────────────────────
     if deal_selection:
-        return {"view": "deal", "client": client_slug, "deal": deal_selection}
+        st.session_state["active_deal"] = deal_selection
+        st.session_state.pop("active_model", None)
+        st.rerun()
 
-    if selection:
-        return {"view": "model", "client": client_slug, "model": selection}
+    if model_selection:
+        st.session_state["active_model"] = model_selection
+        st.session_state.pop("active_deal", None)
+        st.rerun()
 
     return {"view": "client_overview", "client": client_slug}
 
 
-def _render_model_tree(nodes: list[dict], client_slug: str, depth: int) -> str | None:
-    """Render model tree in sidebar. Returns slug of selected model or None."""
+def _render_new_client_form(client_slugs: list) -> None:
+    """Inline form for creating a new client."""
+    with st.sidebar.form("new_client_form"):
+        nc_name = st.text_input("Client Name")
+        nc_industry = st.text_input("Industry", value="")
+        nc_notes = st.text_area("Notes", value="")
+        if st.form_submit_button("Create Client"):
+            if nc_name:
+                slug = _slugify(nc_name)
+                create_client(slug, nc_name, nc_industry, nc_notes)
+                st.session_state["show_new_client"] = False
+                st.session_state["nav_client"] = len(client_slugs)
+                st.rerun()
+
+
+def _render_model_tree(nodes: list[dict], depth: int) -> str | None:
+    """Render model tree in sidebar. Returns slug of clicked model or None."""
     selected = None
     for node in nodes:
         indent = "  " * depth
@@ -116,12 +208,13 @@ def _render_model_tree(nodes: list[dict], client_slug: str, depth: int) -> str |
         label = f"{indent}{prefix}{node['name']}"
         if st.sidebar.button(label, key=f"nav_model_{node['slug']}"):
             selected = node["slug"]
-        # Recurse into children
-        child_sel = _render_model_tree(node["children"], client_slug, depth + 1)
+        child_sel = _render_model_tree(node["children"], depth + 1)
         if child_sel:
             selected = child_sel
     return selected
 
+
+# ── Client Overview (main area) ────────────────────────────────────────
 
 def render_client_overview(client_slug: str) -> None:
     """Render client overview in the main area."""
@@ -196,7 +289,6 @@ def _do_import(client_slug: str, url_or_param: str, name: str) -> None:
     import zlib
     from urllib.parse import urlparse, parse_qs
 
-    # Extract the encoded parameter from a full URL or bare string
     encoded = url_or_param.strip()
     if "?" in encoded:
         parsed = urlparse(encoded)
@@ -209,7 +301,6 @@ def _do_import(client_slug: str, url_or_param: str, name: str) -> None:
             st.error("URL has no `?m=` or `?d=` parameter.")
             return
 
-    # Try to decode as Model 1 format (?m= → ModelInputs)
     try:
         compressed = base64.urlsafe_b64decode(encoded)
         data = json.loads(zlib.decompress(compressed).decode())
@@ -217,13 +308,11 @@ def _do_import(client_slug: str, url_or_param: str, name: str) -> None:
         st.error(f"Could not decode: {e}")
         return
 
-    # Check if it's a Model 1 format (dict with ModelInputs fields)
     from engine.inputs import ModelInputs
     from dataclasses import fields as dc_fields
     model_fields = {f.name for f in dc_fields(ModelInputs)}
 
     if any(k in model_fields for k in data.keys()):
-        # Model 1 format — direct ModelInputs dict
         from store.serialization import dict_to_model_inputs
         try:
             inp = dict_to_model_inputs(data)
@@ -236,16 +325,13 @@ def _do_import(client_slug: str, url_or_param: str, name: str) -> None:
         st.rerun()
 
     elif any(k.startswith(("b_", "a_", "sb_", "d_")) for k in data.keys()):
-        # Model 2 format — session state dict with prefixed keys
-        # Extract "before" state as a base model
         before_fields = {k[2:]: v for k, v in data.items() if k.startswith("b_")}
         if before_fields:
-            # Map widget keys back to ModelInputs fields where possible
             from store.serialization import dict_to_model_inputs
             try:
                 inp = dict_to_model_inputs(before_fields)
             except Exception:
-                inp = ModelInputs()  # fallback to defaults
+                inp = ModelInputs()
             slug = _slugify(name)
             create_base_model(client_slug, slug, name, inp, description="Imported from deal URL (before state)")
             st.success(f"Imported before-state as base model: **{name}**")
