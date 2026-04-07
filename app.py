@@ -289,6 +289,8 @@ elif view == "model":
 
 elif view == "new_model":
     client_slug = nav["client"]
+    if st.button("← Back to overview"):
+        st.rerun()
     st.markdown("## Create New Model")
 
     with st.form("new_model_form"):
@@ -415,6 +417,8 @@ elif view == "deal":
 
 elif view == "new_deal":
     client_slug = nav["client"]
+    if st.button("← Back to overview"):
+        st.rerun()
     st.markdown("## Create New Deal")
 
     models = list_models(client_slug)

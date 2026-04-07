@@ -180,6 +180,9 @@ def _render_full_nav(client_slug: str, client_name: str) -> dict:
     tree = get_model_tree(client_slug)
     model_selection = _render_model_tree(tree, depth=0)
 
+    if st.sidebar.button("+ New Model", key="nav_new_model"):
+        return {"view": "new_model", "client": client_slug, "base": None}
+
     # ── Deals ──────────────────────────────────────────────────────
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Deals**")
@@ -190,6 +193,9 @@ def _render_full_nav(client_slug: str, client_name: str) -> dict:
         label = f"  {deal_file.name}"
         if st.sidebar.button(label, key=f"nav_deal_{deal_slug}", help=f"{deal_file.before_model} → {deal_file.after_model}"):
             deal_selection = deal_slug
+
+    if st.sidebar.button("+ New Deal", key="nav_new_deal"):
+        return {"view": "new_deal", "client": client_slug}
 
     # Compare
     if len(deals) >= 2:
