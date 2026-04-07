@@ -181,7 +181,8 @@ def _render_full_nav(client_slug: str, client_name: str) -> dict:
 
     deal_selection = None
     for deal_slug, deal_file in deals:
-        if st.sidebar.button(f"  {deal_file.name}", key=f"nav_deal_{deal_slug}"):
+        label = f"  {deal_file.name}"
+        if st.sidebar.button(label, key=f"nav_deal_{deal_slug}", help=f"{deal_file.before_model} → {deal_file.after_model}"):
             deal_selection = deal_slug
 
     if st.sidebar.button("+ New Deal", key="nav_new_deal"):

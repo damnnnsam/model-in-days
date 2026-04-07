@@ -334,6 +334,13 @@ elif view == "deal":
         if deal_file.notes:
             st.caption(deal_file.notes)
 
+        # Show which models this deal compares
+        before_mf = load_model_file(client_slug, deal_file.before_model)
+        after_mf = load_model_file(client_slug, deal_file.after_model)
+        before_label = before_mf.name if before_mf else deal_file.before_model
+        after_label = after_mf.name if after_mf else deal_file.after_model
+        st.markdown(f"**{before_label}** → **{after_label}**")
+
         try:
             inp_before = resolve_model(client_slug, deal_file.before_model)
             inp_after = resolve_model(client_slug, deal_file.after_model)
