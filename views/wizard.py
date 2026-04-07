@@ -42,8 +42,30 @@ def _slugify(name: str) -> str:
     return s.strip("-")
 
 
+def _inject_sticky_sidebar_css() -> None:
+    """Make the bottom of the sidebar sticky."""
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"] > div:first-child {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+    .sticky-sidebar-bottom {
+        position: sticky;
+        bottom: 0;
+        background: var(--secondary-background-color, #141414);
+        padding: 1rem 0 0.5rem 0;
+        border-top: 1px solid #333;
+        z-index: 10;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
 def render_wizard(client_slug: str) -> None:
     """Render the 3-step deal wizard."""
+    _inject_sticky_sidebar_css()
     st.markdown("## New Engagement")
 
     # Step tracker
@@ -87,17 +109,18 @@ def _step_1_baseline(client_slug: str) -> None:
     c2.metric("Equity Value (EBITDA)", _fd(val.equity_value_ebitda))
     c3.metric("Cash Balance", _fd(val.cash_at_valuation))
 
-    # Save & continue
-    st.sidebar.markdown("---")
+    # Save & continue (sticky bottom)
+    st.sidebar.markdown('<div class="sticky-sidebar-bottom">', unsafe_allow_html=True)
     name = st.sidebar.text_input("Baseline name", value="Current State", key="wiz_b_name")
 
-    if st.sidebar.button("Save & Continue →", key="wiz_b_save", type="primary"):
+    if st.sidebar.button("Save & Continue →", key="wiz_b_save", type="primary", use_container_width=True):
         slug = _slugify(name)
         create_base_model(client_slug, slug, name, inp,
                          description="Baseline — current state assessment")
         st.session_state["wiz_base_slug"] = slug
         st.session_state["wiz_step"] = 2
         st.rerun()
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Step 2: Model the improvements ────────────────────────────────────
@@ -153,23 +176,24 @@ def _step_2_improvements(client_slug: str) -> None:
     if not overrides:
         st.warning("No changes from baseline yet. Adjust the metrics the operator will improve.")
 
-    # Navigation
-    st.sidebar.markdown("---")
+    # Navigation (sticky bottom)
+    st.sidebar.markdown('<div class="sticky-sidebar-bottom">', unsafe_allow_html=True)
     name = st.sidebar.text_input("Target state name", value="Target State", key="wiz_a_name")
 
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        if st.button("← Back", key="wiz_a_back"):
+        if st.button("← Back", key="wiz_a_back", use_container_width=True):
             st.session_state["wiz_step"] = 1
             st.rerun()
     with col2:
-        if st.button("Save & Continue →", key="wiz_a_save", type="primary", disabled=not overrides):
+        if st.button("Continue →", key="wiz_a_save", type="primary", disabled=not overrides, use_container_width=True):
             slug = _slugify(name)
             create_layered_model(client_slug, slug, name, base_slug, overrides,
                                description="Target state — projected improvements")
             st.session_state["wiz_after_slug"] = slug
             st.session_state["wiz_step"] = 3
             st.rerun()
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Step 3: Configure compensation ────────────────────────────────────
@@ -310,17 +334,17 @@ def _step_3_compensation(client_slug: str) -> None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Save
-    st.sidebar.markdown("---")
+    # Save (sticky bottom)
+    st.sidebar.markdown('<div class="sticky-sidebar-bottom">', unsafe_allow_html=True)
     deal_name = st.sidebar.text_input("Engagement name", value="Engagement Proposal", key="wiz_c_name")
 
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        if st.button("← Back", key="wiz_c_back"):
+        if st.button("← Back", key="wiz_c_back", use_container_width=True):
             st.session_state["wiz_step"] = 2
             st.rerun()
     with col2:
-        if st.button("Finalize Engagement", key="wiz_c_save", type="primary"):
+        if st.button("Finalize", key="wiz_c_save", type="primary", use_container_width=True):
             deal_slug = _slugify(deal_name)
             deal_file = DealFile(
                 name=deal_name,
@@ -347,4 +371,4 @@ def _step_3_compensation(client_slug: str) -> None:
             st.session_state["active_deal"] = deal_slug
             st.success(f"Deal saved: **{deal_name}**")
             st.rerun()
-
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
