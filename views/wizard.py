@@ -341,6 +341,7 @@ def _step_3_compensation(client_slug: str) -> None:
             for k in list(st.session_state.keys()):
                 if k.startswith("wiz_"):
                     del st.session_state[k]
+            st.session_state.pop("active_wizard", None)
 
             # Navigate to the deal
             st.session_state["active_deal"] = deal_slug

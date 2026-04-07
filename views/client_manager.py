@@ -52,6 +52,18 @@ def render_sidebar_navigation() -> dict:
     client_meta = load_client_meta(client_slug)
     client_name = client_meta.name if client_meta else client_slug
 
+    # ── Check if wizard is active ─────────────────────────────────
+    if st.session_state.get("active_wizard"):
+        st.sidebar.caption(f"{client_name} > New Engagement")
+        if st.sidebar.button("← Back to overview", key="nav_wiz_back", use_container_width=True):
+            st.session_state.pop("active_wizard", None)
+            for k in list(st.session_state.keys()):
+                if k.startswith("wiz_"):
+                    del st.session_state[k]
+            st.rerun()
+        st.sidebar.markdown("---")
+        return {"view": "wizard", "client": client_slug}
+
     # ── Check if we're inside a model or deal ──────────────────────
     active_model = st.session_state.get("active_model")
     active_deal = st.session_state.get("active_deal")
@@ -176,7 +188,10 @@ def _render_full_nav(client_slug: str, client_name: str) -> dict:
         return {"view": "new_deal", "client": client_slug}
 
     if st.sidebar.button("New Engagement", key="nav_wizard", type="primary"):
-        return {"view": "wizard", "client": client_slug}
+        st.session_state["active_wizard"] = True
+        st.session_state.pop("active_model", None)
+        st.session_state.pop("active_deal", None)
+        st.rerun()
 
     # Compare
     if len(deals) >= 2:
