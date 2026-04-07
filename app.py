@@ -337,9 +337,12 @@ elif view == "deal":
         # Show which models this deal compares
         before_mf = load_model_file(client_slug, deal_file.before_model)
         after_mf = load_model_file(client_slug, deal_file.after_model)
-        before_label = before_mf.name if before_mf else deal_file.before_model
-        after_label = after_mf.name if after_mf else deal_file.after_model
-        st.markdown(f"**{before_label}** → **{after_label}**")
+        before_name = before_mf.name if before_mf else deal_file.before_model
+        after_name = after_mf.name if after_mf else deal_file.after_model
+        before_desc = before_mf.description if before_mf and before_mf.description else "—"
+        after_desc = after_mf.description if after_mf and after_mf.description else "—"
+        after_overrides = len(after_mf.overrides) if after_mf and after_mf.overrides else 0
+        after_base = after_mf.base if after_mf else None
 
         try:
             inp_before = resolve_model(client_slug, deal_file.before_model)
@@ -350,6 +353,37 @@ elif view == "deal":
 
         comp = get_compensation_structure(deal_file)
         eng = get_engagement_config(deal_file)
+
+        # Model reference panel
+        with st.expander("Models being compared", expanded=True):
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                st.markdown(f"**Baseline: {before_name}**")
+                st.caption(before_desc)
+                st.markdown(f"""
+| Parameter | Value |
+|-----------|-------|
+| Channels | {'Inbound ' if inp_before.use_inbound else ''}{'Outbound ' if inp_before.use_outbound else ''}{'Organic ' if inp_before.use_organic else ''}{'Viral' if inp_before.use_viral else ''} |
+| Price | ${inp_before.price_of_offer:,.0f} |
+| Churn | {inp_before.churn_rate}% |
+| Fixed Costs | ${inp_before.fixed_costs_per_month:,.0f}/mo |
+""")
+            with mc2:
+                st.markdown(f"**Target: {after_name}**")
+                st.caption(after_desc)
+                if after_base:
+                    st.markdown(f"Based on: {after_base} | {after_overrides} fields modified")
+                # Show the deltas
+                from store.serialization import compute_overrides as _co
+                deltas = _co(inp_before, inp_after)
+                if deltas:
+                    delta_lines = []
+                    for k, v in deltas.items():
+                        old = getattr(inp_before, k)
+                        delta_lines.append(f"| `{k}` | {old} → **{v}** |")
+                    st.markdown("| Field | Change |\n|-------|--------|\n" + "\n".join(delta_lines))
+                else:
+                    st.markdown("*No differences from baseline*")
 
         # Compensation editor in sidebar
         st.sidebar.markdown("---")
