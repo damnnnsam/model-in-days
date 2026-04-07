@@ -25,6 +25,7 @@ from ui.dashboard import render_kpi_cards
 from store.model import create_base_model, create_layered_model, resolve_model
 from store.deal import save_deal, DealFile
 from store.serialization import model_inputs_to_dict, compute_overrides, comp_structure_to_dict
+from ui.sidebar import render_model_inputs
 
 
 def _fd(v: float) -> str:
@@ -69,7 +70,7 @@ def _step_1_baseline(client_slug: str) -> None:
     st.caption("Capture the client's baseline operating metrics. The valuation updates live.")
 
     # Sidebar inputs
-    inp = _render_full_model_inputs(prefix="wiz_b")
+    inp = render_model_inputs(prefix="wiz_b")
 
     # Live dashboard
     sim = run_simulation(inp)
@@ -117,7 +118,7 @@ def _step_2_improvements(client_slug: str) -> None:
     inp_before = resolve_model(client_slug, base_slug)
 
     # Sidebar inputs — pre-populated with baseline values
-    inp_after = _render_full_model_inputs(prefix="wiz_a", defaults=inp_before)
+    inp_after = render_model_inputs(defaults=inp_before, prefix="wiz_a")
 
     # Show what changed
     overrides = compute_overrides(inp_before, inp_after)
@@ -346,73 +347,3 @@ def _step_3_compensation(client_slug: str) -> None:
             st.success(f"Deal saved: **{deal_name}**")
             st.rerun()
 
-
-# ── Full model inputs renderer ─────────────────────────────────────────
-
-def _render_full_model_inputs(prefix: str, defaults: ModelInputs | None = None) -> ModelInputs:
-    """Render all model inputs in the sidebar. Returns the edited ModelInputs."""
-    inp = defaults if defaults else ModelInputs()
-    edited = ModelInputs(**inp.__dict__)
-
-    with st.sidebar.expander("Starting State", expanded=False):
-        edited.cash_in_bank = st.number_input("Cash in Bank ($)", value=inp.cash_in_bank, step=1000.0, key=f"{prefix}_cash")
-        edited.customer_count = int(st.number_input("Initial Customers", value=inp.customer_count, step=1, key=f"{prefix}_custs"))
-        edited.total_addressable_market = int(st.number_input("TAM", value=inp.total_addressable_market, step=1000, key=f"{prefix}_tam"))
-        edited.debt = st.number_input("Debt ($)", value=inp.debt, step=1000.0, key=f"{prefix}_debt")
-        edited.interest_rate = st.number_input("Interest Rate (%)", value=inp.interest_rate, step=0.5, key=f"{prefix}_ir")
-
-    with st.sidebar.expander("Product", expanded=False):
-        edited.price_of_offer = st.number_input("Price ($)", value=inp.price_of_offer, step=500.0, key=f"{prefix}_price")
-        edited.realization_rate = st.number_input("Realization Rate (%)", value=inp.realization_rate, step=1.0, key=f"{prefix}_rr")
-        edited.cost_to_fulfill = st.number_input("Cost to Fulfill (%)", value=inp.cost_to_fulfill, step=1.0, key=f"{prefix}_cf")
-        edited.cost_to_sell = st.number_input("Cost to Sell (%)", value=inp.cost_to_sell, step=1.0, key=f"{prefix}_cs")
-        edited.time_to_collect = int(st.number_input("Time to Collect (days)", value=inp.time_to_collect, step=30, key=f"{prefix}_ttc"))
-        edited.contract_length = int(st.number_input("Contract Length (days)", value=inp.contract_length, step=30, key=f"{prefix}_cl"))
-        edited.refund_period = int(st.number_input("Refund Period (days)", value=inp.refund_period, step=10, key=f"{prefix}_refp"))
-        edited.refund_rate = st.number_input("Refund Rate (%)", value=inp.refund_rate, step=0.5, key=f"{prefix}_refr")
-
-    with st.sidebar.expander("Sales", expanded=False):
-        edited.cost_to_sell = st.number_input("Sales Commission (%)", value=inp.cost_to_sell, step=1.0, key=f"{prefix}_cs2")
-        edited.time_to_sell = int(st.number_input("Sales Cycle (days)", value=inp.time_to_sell, step=5, key=f"{prefix}_tts"))
-
-    with st.sidebar.expander("Channels", expanded=True):
-        edited.use_inbound = st.checkbox("Inbound (Paid Ads)", value=inp.use_inbound, key=f"{prefix}_use_in")
-        if edited.use_inbound:
-            edited.media_spend = st.number_input("Media Spend ($/mo)", value=inp.media_spend, step=1000.0, key=f"{prefix}_ms")
-            edited.cpm = st.number_input("CPM ($)", value=inp.cpm, step=5.0, key=f"{prefix}_cpm")
-            edited.ctr = st.number_input("CTR (%)", value=inp.ctr, step=0.1, key=f"{prefix}_ctr")
-            edited.funnel_conversion_rate = st.number_input("Funnel Conv (%)", value=inp.funnel_conversion_rate, step=0.5, key=f"{prefix}_fcr")
-            edited.lead_conversion_rate_inbound = st.number_input("Lead Conv (%)", value=inp.lead_conversion_rate_inbound, step=1.0, key=f"{prefix}_lcri")
-
-        edited.use_outbound = st.checkbox("Outbound (SDRs)", value=inp.use_outbound, key=f"{prefix}_use_ob")
-        if edited.use_outbound:
-            edited.number_of_sdrs = int(st.number_input("SDRs", value=inp.number_of_sdrs, step=1, key=f"{prefix}_sdrs"))
-            edited.outbound_salary = st.number_input("SDR Salary ($/mo)", value=inp.outbound_salary, step=500.0, key=f"{prefix}_sal")
-            edited.contacts_per_month = int(st.number_input("Contacts/mo", value=inp.contacts_per_month, step=500, key=f"{prefix}_cpm_ob"))
-            edited.outbound_conversion_rate = st.number_input("Contact→Lead (%)", value=inp.outbound_conversion_rate, step=0.1, key=f"{prefix}_ocr")
-            edited.lead_conversion_rate_outbound = st.number_input("Lead Conv (%)", value=inp.lead_conversion_rate_outbound, step=1.0, key=f"{prefix}_lcro")
-
-        edited.use_organic = st.checkbox("Organic", value=inp.use_organic, key=f"{prefix}_use_org")
-        if edited.use_organic:
-            edited.organic_views_per_month = int(st.number_input("Views/mo", value=inp.organic_views_per_month, step=1000, key=f"{prefix}_orgv"))
-            edited.organic_view_to_lead_rate = st.number_input("View→Lead (%)", value=inp.organic_view_to_lead_rate, step=0.1, key=f"{prefix}_orgc")
-            edited.lead_to_customer_rate_organic = st.number_input("Lead Conv (%)", value=inp.lead_to_customer_rate_organic, step=1.0, key=f"{prefix}_lcro2")
-            edited.organic_cost_per_month = st.number_input("Cost ($/mo)", value=inp.organic_cost_per_month, step=500.0, key=f"{prefix}_orgcost")
-
-    with st.sidebar.expander("Renewals", expanded=False):
-        edited.churn_rate = st.number_input("Churn Rate (%)", value=inp.churn_rate, step=5.0, key=f"{prefix}_churn")
-        if edited.churn_rate < 100:
-            edited.price_of_renewal = st.number_input("Renewal Price ($)", value=inp.price_of_renewal, step=500.0, key=f"{prefix}_pren")
-            edited.renewal_rate_of_renewals = st.number_input("Renewal of Renewals (%)", value=inp.renewal_rate_of_renewals, step=5.0, key=f"{prefix}_ror")
-
-    with st.sidebar.expander("Administration", expanded=False):
-        edited.transaction_fee = st.number_input("Transaction Fee (%)", value=inp.transaction_fee, step=0.1, key=f"{prefix}_tf")
-        edited.fixed_costs_per_month = st.number_input("Fixed Costs ($/mo)", value=inp.fixed_costs_per_month, step=1000.0, key=f"{prefix}_fc")
-
-    with st.sidebar.expander("Valuation", expanded=False):
-        edited.tax_rate = st.number_input("Tax Rate (%)", value=inp.tax_rate, step=1.0, key=f"{prefix}_tax")
-        edited.discount_rate = st.number_input("Discount Rate (%)", value=inp.discount_rate, step=0.5, key=f"{prefix}_dr")
-        edited.perpetual_growth_rate = st.number_input("Perpetual Growth (%)", value=inp.perpetual_growth_rate, step=0.5, key=f"{prefix}_pgr")
-        edited.time_max = int(st.number_input("Simulation Days", value=inp.time_max, step=100, key=f"{prefix}_tmax"))
-
-    return edited

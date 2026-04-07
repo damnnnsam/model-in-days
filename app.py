@@ -44,50 +44,9 @@ from views.wizard import render_wizard
 # ── Helper: Model Inputs Editor ────────────────────────────────────────
 
 def _render_model_inputs_editor(inp: ModelInputs, prefix: str = "edit") -> ModelInputs:
-    """Render editable model inputs in the sidebar. Returns the edited ModelInputs."""
-    edited = ModelInputs(**inp.__dict__)
-
-    with st.sidebar.expander("Starting State", expanded=False):
-        edited.cash_in_bank = st.number_input("Cash in Bank ($)", value=inp.cash_in_bank, step=1000.0, key=f"{prefix}_cash")
-        edited.customer_count = int(st.number_input("Initial Customers", value=inp.customer_count, step=1, key=f"{prefix}_custs"))
-        edited.total_addressable_market = int(st.number_input("TAM", value=inp.total_addressable_market, step=1000, key=f"{prefix}_tam"))
-        edited.debt = st.number_input("Debt ($)", value=inp.debt, step=1000.0, key=f"{prefix}_debt")
-        edited.interest_rate = st.number_input("Interest Rate (%)", value=inp.interest_rate, step=0.5, key=f"{prefix}_ir")
-        edited.fixed_costs_per_month = st.number_input("Fixed Costs ($/mo)", value=inp.fixed_costs_per_month, step=500.0, key=f"{prefix}_fc")
-
-    with st.sidebar.expander("Product", expanded=False):
-        edited.price_of_offer = st.number_input("Price ($)", value=inp.price_of_offer, step=500.0, key=f"{prefix}_price")
-        edited.realization_rate = st.number_input("Realization Rate (%)", value=inp.realization_rate, step=1.0, key=f"{prefix}_rr")
-        edited.cost_to_fulfill = st.number_input("Cost to Fulfill (%)", value=inp.cost_to_fulfill, step=1.0, key=f"{prefix}_cf")
-        edited.cost_to_sell = st.number_input("Cost to Sell (%)", value=inp.cost_to_sell, step=1.0, key=f"{prefix}_cs")
-        edited.time_to_collect = int(st.number_input("Time to Collect (days)", value=inp.time_to_collect, step=10, key=f"{prefix}_ttc"))
-        edited.contract_length = int(st.number_input("Contract Length (days)", value=inp.contract_length, step=30, key=f"{prefix}_cl"))
-        edited.churn_rate = st.number_input("Churn Rate (%)", value=inp.churn_rate, step=1.0, key=f"{prefix}_churn")
-
-    with st.sidebar.expander("Channels", expanded=False):
-        edited.use_inbound = st.checkbox("Inbound", value=inp.use_inbound, key=f"{prefix}_use_in")
-        if edited.use_inbound:
-            edited.media_spend = st.number_input("Media Spend ($/mo)", value=inp.media_spend, step=1000.0, key=f"{prefix}_ms")
-            edited.cpm = st.number_input("CPM ($)", value=inp.cpm, step=5.0, key=f"{prefix}_cpm")
-            edited.ctr = st.number_input("CTR (%)", value=inp.ctr, step=0.1, key=f"{prefix}_ctr")
-            edited.funnel_conversion_rate = st.number_input("Funnel Conv (%)", value=inp.funnel_conversion_rate, step=0.5, key=f"{prefix}_fcr")
-            edited.lead_conversion_rate_inbound = st.number_input("Lead Conv Inbound (%)", value=inp.lead_conversion_rate_inbound, step=1.0, key=f"{prefix}_lcri")
-
-        edited.use_outbound = st.checkbox("Outbound", value=inp.use_outbound, key=f"{prefix}_use_ob")
-        if edited.use_outbound:
-            edited.number_of_sdrs = int(st.number_input("SDRs", value=inp.number_of_sdrs, step=1, key=f"{prefix}_sdrs"))
-            edited.outbound_salary = st.number_input("SDR Salary ($/mo)", value=inp.outbound_salary, step=500.0, key=f"{prefix}_sal")
-            edited.contacts_per_month = int(st.number_input("Contacts/mo", value=inp.contacts_per_month, step=500, key=f"{prefix}_cpm_ob"))
-            edited.outbound_conversion_rate = st.number_input("Contact→Lead (%)", value=inp.outbound_conversion_rate, step=0.1, key=f"{prefix}_ocr")
-            edited.lead_conversion_rate_outbound = st.number_input("Lead Conv Outbound (%)", value=inp.lead_conversion_rate_outbound, step=1.0, key=f"{prefix}_lcro")
-
-    with st.sidebar.expander("Valuation", expanded=False):
-        edited.tax_rate = st.number_input("Tax Rate (%)", value=inp.tax_rate, step=1.0, key=f"{prefix}_tax")
-        edited.discount_rate = st.number_input("Discount Rate (%)", value=inp.discount_rate, step=0.5, key=f"{prefix}_dr")
-        edited.perpetual_growth_rate = st.number_input("Perpetual Growth (%)", value=inp.perpetual_growth_rate, step=0.5, key=f"{prefix}_pgr")
-        edited.time_max = int(st.number_input("Simulation Days", value=inp.time_max, step=100, key=f"{prefix}_tmax"))
-
-    return edited
+    """Render editable model inputs in the sidebar using the canonical renderer."""
+    from ui.sidebar import render_model_inputs
+    return render_model_inputs(defaults=inp, prefix=prefix)
 
 
 # ── Helper: Compensation Editor ────────────────────────────────────────
