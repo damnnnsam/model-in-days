@@ -43,21 +43,27 @@ def _slugify(name: str) -> str:
 
 
 def _inject_sticky_sidebar_css() -> None:
-    """Make the bottom of the sidebar sticky."""
+    """Float the save/continue bar at the bottom of the sidebar."""
     st.markdown("""
     <style>
-    [data-testid="stSidebar"] > div:first-child {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
+    /* Add padding at bottom of sidebar so content doesn't hide behind the fixed bar */
+    [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        padding-bottom: 140px !important;
     }
+    /* Fixed bar at bottom of sidebar */
     .sticky-sidebar-bottom {
-        position: sticky;
+        position: fixed;
         bottom: 0;
-        background: var(--secondary-background-color, #141414);
-        padding: 1rem 0 0.5rem 0;
+        left: 0;
+        width: var(--sidebar-width, 336px);
+        background: #141414;
+        padding: 0.75rem 1rem 1rem 1rem;
         border-top: 1px solid #333;
-        z-index: 10;
+        z-index: 999;
+    }
+    /* When sidebar is collapsed, hide the bar */
+    [data-testid="stSidebar"][aria-expanded="false"] .sticky-sidebar-bottom {
+        display: none;
     }
     </style>
     """, unsafe_allow_html=True)
