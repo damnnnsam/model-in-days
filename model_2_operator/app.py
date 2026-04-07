@@ -478,6 +478,7 @@ active_comp = CompensationStructure(
     rev_share_cap_monthly=sb_cap_mo,
     rev_share_cap_total=sb_cap_tot,
     per_deal_amount=sb_per_deal,
+    contract_term_months=max(d_duration // 30, 1) if d_duration > 0 else 0,
 )
 
 # Build DealTerms for existing tabs (maps from new comp inputs)
@@ -1516,6 +1517,7 @@ with tab_comp_cmp:
             "rev_share_cap_monthly": active_comp.rev_share_cap_monthly,
             "rev_share_cap_total": active_comp.rev_share_cap_total,
             "per_deal_amount": active_comp.per_deal_amount,
+            "contract_term_months": active_comp.contract_term_months,
         })
         st.success("Structure A saved. Adjust inputs in Comp Structure tab, then return here.")
 
@@ -1542,6 +1544,7 @@ with tab_comp_cmp:
             rev_share_cap_monthly=a_data["rev_share_cap_monthly"],
             rev_share_cap_total=a_data["rev_share_cap_total"],
             per_deal_amount=a_data["per_deal_amount"],
+            contract_term_months=a_data.get("contract_term_months", 12),
         )
         res_a = compute_compensation(comp_a, sim_after, inp_after)
         res_b = comp_result  # current structure from Comp Structure tab

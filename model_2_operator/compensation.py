@@ -297,14 +297,18 @@ def compute_compensation(
     # ── Track lifetime rev-share cap ────────────────────────────────
     rs_remaining = comp.rev_share_cap_total if comp.rev_share_cap_total > 0 else float("inf")
 
+    # ── Contract term cap (retainer + per-deal stop at contract end) ──
+    contract_end_month = comp.contract_term_months if comp.contract_term_months > 0 else n_months
+
     # ── Monthly loop ────────────────────────────────────────────────
     for m in range(n_months):
         mo = m + 1  # 1-indexed month
 
-        # 2. Retainer (with escalation)
-        retainer_arr[m] = _get_retainer_amount(comp, mo)
+        # 2. Retainer (with escalation) — capped at contract term
+        if mo <= contract_end_month:
+            retainer_arr[m] = _get_retainer_amount(comp, mo)
 
-        # 3. Rev share
+        # 3. Rev share (uses its own duration controls, NOT contract term)
         if comp.rev_share_mode == "baseline":
             # ── Mode A: single global stream ────────────────────────
             if comp.rev_share_basis == "gross_profit":
@@ -372,8 +376,8 @@ def compute_compensation(
 
             rev_share_arr[m] = month_total_rs
 
-        # 7. Per-deal bonus
-        if monthly_new_custs[m] > 0 and base_per_deal > 0:
+        # 7. Per-deal bonus — capped at contract term
+        if mo <= contract_end_month and monthly_new_custs[m] > 0 and base_per_deal > 0:
             per_deal_arr[m] = monthly_new_custs[m] * base_per_deal * type_mod_pd
 
     # ── Totals and derived arrays ───────────────────────────────────
@@ -412,7 +416,7 @@ def compute_compensation(
         total_retainer=float(np.sum(retainer_arr)),
         total_rev_share=total_rs,
         total_per_deal=float(np.sum(per_deal_arr)),
-        avg_monthly_earnings=total_earned / max(n_months, 1),
+        avg_monthly_earnings=total_earned / max(int(np.count_nonzero(total_comp)), 1),
         effective_rate_per_customer=total_earned / max(total_new, 1),
         effective_rev_share_rate=(total_rs / max(total_rev, 1)) * 100,
     )
