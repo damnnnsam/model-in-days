@@ -56,6 +56,19 @@ def render_sidebar_navigation() -> dict:
     active_model = st.session_state.get("active_model")
     active_deal = st.session_state.get("active_deal")
 
+    # Verify the active model/deal actually exists for this client
+    if active_model:
+        mf = load_model_file(client_slug, active_model)
+        if mf is None:
+            st.session_state.pop("active_model", None)
+            active_model = None
+    if active_deal:
+        from store.deal import load_deal as _load_deal
+        df = _load_deal(client_slug, active_deal)
+        if df is None:
+            st.session_state.pop("active_deal", None)
+            active_deal = None
+
     # If active, render breadcrumb mode (compact)
     if active_model or active_deal:
         return _render_breadcrumb_mode(client_slug, client_name, active_model, active_deal)
@@ -170,7 +183,7 @@ def _render_full_nav(client_slug: str, client_name: str) -> dict:
         if st.sidebar.button("Compare Deals", key="nav_compare"):
             return {"view": "compare", "client": client_slug, "deals": [s for s, _ in deals]}
 
-    # ── Handle clicks ──────────────────────────────────────────────
+    # ── Handle clicks — set active and rerun to switch to breadcrumb ──
     if deal_selection:
         st.session_state["active_deal"] = deal_selection
         st.session_state.pop("active_model", None)
