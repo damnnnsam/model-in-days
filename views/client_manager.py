@@ -234,8 +234,7 @@ def _render_model_tree(nodes: list[dict], depth: int) -> str | None:
     selected = None
     for node in nodes:
         indent = "› " * depth
-        base_tag = "" if node["base"] else " (base)"
-        label = f"{indent}{node['name']}{base_tag}"
+        label = f"{indent}{node['name']}"
         if st.sidebar.button(label, key=f"nav_model_{node['slug']}", use_container_width=True):
             selected = node["slug"]
         child_sel = _render_model_tree(node["children"], depth + 1)
