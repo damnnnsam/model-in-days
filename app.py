@@ -249,7 +249,19 @@ elif view == "model":
     if mf is None:
         st.error(f"Model not found: {model_slug}")
     else:
-        st.markdown(f"## {mf.name}")
+        col_title, col_dup = st.columns([5, 1])
+        with col_title:
+            st.markdown(f"## {mf.name}")
+        with col_dup:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Duplicate", key=f"dup_{model_slug}"):
+                import re as _re
+                copy_name = f"{mf.name} (copy)"
+                copy_slug = _re.sub(r"[^a-z0-9]+", "-", copy_name.lower().strip()).strip("-")
+                create_base_model(client_slug, copy_slug, copy_name, inp,
+                                 description=f"Copy of {mf.name}")
+                st.session_state["active_model"] = copy_slug
+                st.rerun()
         if mf.description:
             st.caption(mf.description)
         if mf.base:
