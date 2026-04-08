@@ -294,7 +294,7 @@ def render_model_inputs(defaults: ModelInputs | None = None, prefix: str = "mi",
     reimplementing input widgets. Supports pre-populated defaults for editing
     saved models.
     """
-    inp = defaults if defaults is not None else ModelInputs()
+    inp = ModelInputs(**defaults.__dict__) if defaults is not None else ModelInputs()
 
     if show_title:
         st.sidebar.markdown("### Model Inputs")
