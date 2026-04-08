@@ -9,3 +9,6 @@ logs/
 *.err
 .DS_Store
 current_model.json
+service_account.json
+oauth_credentials.json
+.gspread_token.json

@@ -6,8 +6,10 @@ Changing an input recalculates the entire model.
 """
 from __future__ import annotations
 
+import os
+import json
+
 import gspread
-from google.oauth2.service_account import Credentials
 
 from engine.inputs import ModelInputs
 from store.serialization import model_inputs_to_dict, dict_to_model_inputs
@@ -26,28 +28,94 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+# Default folder for exports. Override via st.secrets["sheets_folder_id"] or pass explicitly.
+DEFAULT_FOLDER_ID = "160QxqknYFDNaQ-pjIqGjZ3k-Kn8heWFt"
+
+_PROJECT_ROOT = os.path.join(os.path.dirname(__file__), "..")
+_OAUTH_CREDS_PATH = os.path.join(_PROJECT_ROOT, "oauth_credentials.json")
+_OAUTH_TOKEN_PATH = os.path.join(_PROJECT_ROOT, ".gspread_token.json")
+
 
 def get_gspread_client() -> gspread.Client:
-    """Authenticate via service account from Streamlit secrets or local file."""
+    """
+    Authenticate with Google.
+
+    Priority:
+    1. Streamlit secrets (service account) — for deployed apps
+    2. OAuth2 desktop flow — for local dev (opens browser once, caches token)
+    3. Service account JSON fallback
+    """
+    # 1. Streamlit secrets
     try:
         import streamlit as st
         creds_dict = dict(st.secrets["gcp_service_account"])
+        from google.oauth2.service_account import Credentials
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         return gspread.authorize(creds)
     except Exception:
         pass
 
-    # Fallback: local service_account.json
-    import os
-    sa_path = os.path.join(os.path.dirname(__file__), "..", "service_account.json")
+    # 2. OAuth2 desktop flow (creates files as YOUR account, no quota issues)
+    if os.path.exists(_OAUTH_CREDS_PATH):
+        return _oauth_client()
+
+    # 3. Service account JSON fallback
+    sa_path = os.path.join(_PROJECT_ROOT, "service_account.json")
     if os.path.exists(sa_path):
+        from google.oauth2.service_account import Credentials
         creds = Credentials.from_service_account_file(sa_path, scopes=SCOPES)
         return gspread.authorize(creds)
 
     raise RuntimeError(
-        "No Google credentials found. Set st.secrets['gcp_service_account'] "
-        "or place service_account.json in the project root."
+        "No Google credentials found. Place oauth_credentials.json or "
+        "service_account.json in the project root."
     )
+
+
+def _oauth_client() -> gspread.Client:
+    """OAuth2 desktop flow: opens browser once, caches refresh token."""
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+
+    creds = None
+
+    # Load cached token
+    if os.path.exists(_OAUTH_TOKEN_PATH):
+        with open(_OAUTH_TOKEN_PATH) as f:
+            token_data = json.load(f)
+        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+
+    # Refresh or run flow
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    elif not creds or not creds.valid:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        flow = InstalledAppFlow.from_client_secrets_file(_OAUTH_CREDS_PATH, SCOPES)
+        creds = flow.run_local_server(port=0)
+
+    # Cache token
+    with open(_OAUTH_TOKEN_PATH, "w") as f:
+        json.dump({
+            "token": creds.token,
+            "refresh_token": creds.refresh_token,
+            "token_uri": creds.token_uri,
+            "client_id": creds.client_id,
+            "client_secret": creds.client_secret,
+            "scopes": list(creds.scopes or SCOPES),
+        }, f)
+
+    return gspread.authorize(creds)
+
+
+def _get_folder_id(folder_id: str | None = None) -> str | None:
+    """Resolve the target Drive folder ID."""
+    if folder_id:
+        return folder_id
+    try:
+        import streamlit as st
+        return st.secrets.get("sheets_folder_id", DEFAULT_FOLDER_ID)
+    except Exception:
+        return DEFAULT_FOLDER_ID
 
 
 # ── Inputs sheet ──────────────────────────────────────────────────────
@@ -171,6 +239,12 @@ def _format_daily_sheet(spreadsheet, daily_ws):
 
 # ── Export: Model ─────────────────────────────────────────────────────
 
+def _create_spreadsheet(gc: gspread.Client, title: str, folder_id: str | None = None):
+    """Create a spreadsheet, optionally in a specific Drive folder."""
+    spreadsheet = gc.create(title, folder_id=folder_id)
+    return spreadsheet
+
+
 def export_model_to_sheets(inp: ModelInputs, name: str, folder_id: str | None = None) -> str:
     """
     Create a fully functional spreadsheet from a ModelInputs.
@@ -179,8 +253,8 @@ def export_model_to_sheets(inp: ModelInputs, name: str, folder_id: str | None = 
     """
     gc = get_gspread_client()
 
-    # Create spreadsheet
-    spreadsheet = gc.create(f"Model: {name}", folder_id=folder_id)
+    # Create spreadsheet in the shared folder
+    spreadsheet = _create_spreadsheet(gc, f"Model: {name}", folder_id=_get_folder_id(folder_id))
 
     # ── Inputs sheet (rename default Sheet1) ──
     inputs_ws = spreadsheet.sheet1
@@ -271,7 +345,7 @@ def export_deal_to_sheets(
     Returns the spreadsheet URL.
     """
     gc = get_gspread_client()
-    spreadsheet = gc.create(f"Deal: {deal_name}", folder_id=folder_id)
+    spreadsheet = _create_spreadsheet(gc, f"Deal: {deal_name}", folder_id=_get_folder_id(folder_id))
 
     # ── Baseline model sheets ──
     _write_model_sheets(spreadsheet, inp_before, prefix="Before", is_first=True)
