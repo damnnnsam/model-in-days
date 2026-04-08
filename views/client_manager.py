@@ -33,6 +33,11 @@ def render_sidebar_navigation() -> dict:
     client_names = ["— Select Client —"] + [meta.name for _, meta in clients]
     client_slugs = [None] + [slug for slug, _ in clients]
 
+    # If a new client was just created, pre-select it before the widget renders
+    pending = st.session_state.pop("_pending_client", None)
+    if pending and pending in client_slugs:
+        st.session_state["nav_client"] = client_slugs.index(pending)
+
     selected_idx = st.sidebar.selectbox(
         "Client", range(len(client_names)),
         format_func=lambda i: client_names[i],
@@ -228,7 +233,7 @@ def _render_new_client_form(client_slugs: list) -> None:
                 slug = _slugify(nc_name)
                 create_client(slug, nc_name, nc_industry, nc_notes)
                 st.session_state["show_new_client"] = False
-                st.session_state["nav_client"] = len(client_slugs)
+                st.session_state["_pending_client"] = slug
                 st.rerun()
 
 
