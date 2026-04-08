@@ -137,7 +137,7 @@ def render_model_comparison(client_slug: str) -> None:
     # FCF
     fig_fcf = go.Figure()
     fig_fcf.add_trace(go.Scatter(x=days, y=sim_a.free_cash_flow, name=name_a,
-                                  line=dict(color=COLORS["blue"], width=2)))
+                                  line=dict(color=COLORS["sky"], width=2)))
     fig_fcf.add_trace(go.Scatter(x=days, y=sim_b.free_cash_flow, name=name_b,
                                   line=dict(color=COLORS["green"], width=2)))
     fig_fcf.update_layout(title="Daily Free Cash Flow", yaxis=dict(title="FCF ($)", gridcolor="#1a1a1a"), **chart_layout)
@@ -146,7 +146,7 @@ def render_model_comparison(client_slug: str) -> None:
     # Active customers
     fig_cust = go.Figure()
     fig_cust.add_trace(go.Scatter(x=days, y=sim_a.active_customers, name=name_a,
-                                   line=dict(color=COLORS["blue"], width=2)))
+                                   line=dict(color=COLORS["sky"], width=2)))
     fig_cust.add_trace(go.Scatter(x=days, y=sim_b.active_customers, name=name_b,
                                    line=dict(color=COLORS["green"], width=2)))
     fig_cust.update_layout(title="Active Customers", yaxis=dict(title="Customers", gridcolor="#1a1a1a"), **chart_layout)
@@ -155,7 +155,7 @@ def render_model_comparison(client_slug: str) -> None:
     # Cash balance
     fig_cash = go.Figure()
     fig_cash.add_trace(go.Scatter(x=days, y=sim_a.cash_balance, name=name_a,
-                                   line=dict(color=COLORS["blue"], width=2)))
+                                   line=dict(color=COLORS["sky"], width=2)))
     fig_cash.add_trace(go.Scatter(x=days, y=sim_b.cash_balance, name=name_b,
                                    line=dict(color=COLORS["green"], width=2)))
     fig_cash.update_layout(title="Cash Balance", yaxis=dict(title="Cash ($)", gridcolor="#1a1a1a"), **chart_layout)
@@ -164,7 +164,7 @@ def render_model_comparison(client_slug: str) -> None:
     # Cumulative revenue
     fig_rev = go.Figure()
     fig_rev.add_trace(go.Scatter(x=days, y=np.cumsum(sim_a.cash_collected_total), name=name_a,
-                                  line=dict(color=COLORS["blue"], width=2)))
+                                  line=dict(color=COLORS["sky"], width=2)))
     fig_rev.add_trace(go.Scatter(x=days, y=np.cumsum(sim_b.cash_collected_total), name=name_b,
                                   line=dict(color=COLORS["green"], width=2)))
     fig_rev.update_layout(title="Cumulative Cash Collected", yaxis=dict(title="Cash ($)", gridcolor="#1a1a1a"), **chart_layout)
