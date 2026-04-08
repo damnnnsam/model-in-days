@@ -1,6 +1,6 @@
 {
-  "name": "Axis",
-  "description": "",
+  "name": "Axis (copy)",
+  "description": "Copy of Axis",
   "base": null,
   "inputs": {
     "cash_in_bank": 0.0,
@@ -12,7 +12,7 @@
     "debt": 0.0,
     "interest_rate": 6.0,
     "cost_to_sell": 0.0,
-    "time_to_sell": 45,
+    "time_to_sell": 28,
     "avg_deals_per_rep_per_month": 1.0,
     "use_inbound": false,
     "use_outbound": true,
@@ -24,12 +24,12 @@
     "funnel_conversion_rate": 2.0,
     "time_to_market_inbound": 1,
     "lead_conversion_rate_inbound": 8.0,
-    "outbound_salary": 3000.0,
-    "contacts_per_month": 35000,
+    "outbound_salary": 4000.0,
+    "contacts_per_month": 10000,
     "number_of_sdrs": 1,
-    "outbound_conversion_rate": 0.15,
-    "time_to_market_outbound": 9,
-    "lead_conversion_rate_outbound": 2.5,
+    "outbound_conversion_rate": 0.8,
+    "time_to_market_outbound": 11,
+    "lead_conversion_rate_outbound": 10.0,
     "organic_views_per_month": 0,
     "organic_view_to_lead_rate": 0.0,
     "lead_to_customer_rate_organic": 0.0,
@@ -55,8 +55,8 @@
     "cost_to_sell_viral": 15.0,
     "cost_to_market_viral": 10.0,
     "transaction_fee": 2.9,
-    "fixed_costs_per_month": 10000.0,
-    "fixed_cost_increase_per_100_customers": 0.0,
+    "fixed_costs_per_month": 8000.0,
+    "fixed_cost_increase_per_100_customers": 10000.0,
     "tax_rate": 22.0,
     "inflation_rate": 2.0,
     "time_max": 2500,
@@ -68,6 +68,6 @@
     "projection_period_ebitda": 1825
   },
   "overrides": null,
-  "created": "2026-04-08T20:29:15",
-  "modified": "2026-04-08T21:59:54"
+  "created": "2026-04-08T21:43:35",
+  "modified": "2026-04-08T21:58:05"
 }

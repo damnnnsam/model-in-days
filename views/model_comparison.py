@@ -169,3 +169,93 @@ def render_model_comparison(client_slug: str) -> None:
                                   line=dict(color=COLORS["green"], width=2)))
     fig_rev.update_layout(title="Cumulative Cash Collected", yaxis=dict(title="Cash ($)", gridcolor="#1a1a1a"), **chart_layout)
     st.plotly_chart(fig_rev, use_container_width=True)
+
+
+def render_model_comparison_inline(inp_a: ModelInputs, inp_b: ModelInputs,
+                                   name_a: str, name_b: str) -> None:
+    """Render inline comparison between two resolved ModelInputs.
+    Used directly in the model view when 'Compare with' is selected."""
+
+    sim_a = run_simulation(inp_a)
+    sim_b = run_simulation(inp_b)
+    val_a = compute_valuation(inp_a, sim_a)
+    val_b = compute_valuation(inp_b, sim_b)
+    kpis_a = compute_kpis(inp_a, sim_a)
+    kpis_b = compute_kpis(inp_b, sim_b)
+
+    # Deltas header
+    deltas = compute_overrides(inp_a, inp_b)
+    st.caption(f"Comparing **{name_a}** vs **{name_b}** — {len(deltas)} input differences")
+
+    # KPI deltas as metrics row
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Equity (DCF)", _fd(val_a.equity_value_dcf),
+              delta=_fd(val_b.equity_value_dcf - val_a.equity_value_dcf))
+    c2.metric("Monthly FCF", _fd(val_a.monthly_fcf if hasattr(val_a, 'monthly_fcf') else kpis_a.monthly_fcf),
+              delta=_fd(kpis_b.monthly_fcf - kpis_a.monthly_fcf))
+    c3.metric("Active Customers", f"{kpis_a.active_customers:,.0f}",
+              delta=f"{kpis_b.active_customers - kpis_a.active_customers:+,.0f}")
+    c4.metric("LTV/CAC", f"{kpis_a.ltv_cac_ratio:.1f}x",
+              delta=f"{kpis_b.ltv_cac_ratio - kpis_a.ltv_cac_ratio:+.1f}x")
+    c5.metric("Cash Needed", _fd(kpis_a.cash_needed),
+              delta=_fd(kpis_b.cash_needed - kpis_a.cash_needed), delta_color="inverse")
+
+    c6, c7, c8, c9, c10 = st.columns(5)
+    c6.metric("Monthly Revenue", _fd(kpis_a.monthly_revenue),
+              delta=_fd(kpis_b.monthly_revenue - kpis_a.monthly_revenue))
+    c7.metric("CAC", _fd(kpis_a.cac_blended),
+              delta=_fd(kpis_b.cac_blended - kpis_a.cac_blended), delta_color="inverse")
+    c8.metric("LTV", _fd(kpis_a.ltv),
+              delta=_fd(kpis_b.ltv - kpis_a.ltv))
+    c9.metric("Gross Margin", f"{kpis_a.gross_margin:.1f}%",
+              delta=f"{kpis_b.gross_margin - kpis_a.gross_margin:+.1f}%")
+    c10.metric("Time to Profit", f"{kpis_a.time_to_profitability_days}d",
+               delta=f"{kpis_b.time_to_profitability_days - kpis_a.time_to_profitability_days:+d}d",
+               delta_color="inverse")
+
+    # Input differences
+    if deltas:
+        with st.expander(f"Input differences ({len(deltas)} fields)"):
+            rows = []
+            for k, v in deltas.items():
+                rows.append({"Field": k, name_a: getattr(inp_a, k), name_b: v})
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # Overlay charts
+    chart_layout = dict(
+        template="plotly_dark", height=300,
+        margin=dict(l=50, r=16, t=40, b=36),
+        font=dict(family="JetBrains Mono, Consolas, monospace", size=11, color="#b0b0b0"),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(10,10,10,1)",
+        xaxis=dict(title="Day", gridcolor="#1a1a1a"),
+        legend=dict(orientation="h", y=1.1),
+    )
+    days = sim_a.days
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=days, y=sim_a.free_cash_flow, name=name_a, line=dict(color=COLORS["sky"], width=2)))
+        fig.add_trace(go.Scatter(x=days, y=sim_b.free_cash_flow, name=name_b, line=dict(color=COLORS["green"], width=2)))
+        fig.update_layout(title="Daily FCF", yaxis=dict(gridcolor="#1a1a1a"), **chart_layout)
+        st.plotly_chart(fig, use_container_width=True)
+    with col2:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=days, y=sim_a.cash_balance, name=name_a, line=dict(color=COLORS["sky"], width=2)))
+        fig.add_trace(go.Scatter(x=days, y=sim_b.cash_balance, name=name_b, line=dict(color=COLORS["green"], width=2)))
+        fig.update_layout(title="Cash Balance", yaxis=dict(gridcolor="#1a1a1a"), **chart_layout)
+        st.plotly_chart(fig, use_container_width=True)
+
+    col3, col4 = st.columns(2)
+    with col3:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=days, y=sim_a.active_customers, name=name_a, line=dict(color=COLORS["sky"], width=2)))
+        fig.add_trace(go.Scatter(x=days, y=sim_b.active_customers, name=name_b, line=dict(color=COLORS["green"], width=2)))
+        fig.update_layout(title="Active Customers", yaxis=dict(gridcolor="#1a1a1a"), **chart_layout)
+        st.plotly_chart(fig, use_container_width=True)
+    with col4:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=days, y=np.cumsum(sim_a.cash_collected_total), name=name_a, line=dict(color=COLORS["sky"], width=2)))
+        fig.add_trace(go.Scatter(x=days, y=np.cumsum(sim_b.cash_collected_total), name=name_b, line=dict(color=COLORS["green"], width=2)))
+        fig.update_layout(title="Cumulative Revenue", yaxis=dict(gridcolor="#1a1a1a"), **chart_layout)
+        st.plotly_chart(fig, use_container_width=True)

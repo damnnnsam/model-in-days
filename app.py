@@ -295,7 +295,26 @@ elif view == "model":
             st.sidebar.success("Saved!")
             st.rerun()
 
-        render_model_view(edited_inp, model_name=model_slug)
+        # ── Compare with another model ──
+        all_models = list_models(client_slug)
+        other_models = [(s, m.name) for s, m in all_models if s != model_slug]
+
+        if other_models:
+            compare_options = ["— No comparison —"] + [name for _, name in other_models]
+            compare_slugs = [None] + [s for s, _ in other_models]
+            compare_idx = st.selectbox("Compare with", range(len(compare_options)),
+                                       format_func=lambda i: compare_options[i],
+                                       key=f"cmp_{model_slug}")
+
+            if compare_idx > 0:
+                compare_slug = compare_slugs[compare_idx]
+                compare_inp = resolve_model(client_slug, compare_slug)
+                from views.model_comparison import render_model_comparison_inline
+                render_model_comparison_inline(edited_inp, compare_inp, mf.name, compare_options[compare_idx])
+            else:
+                render_model_view(edited_inp, model_name=model_slug)
+        else:
+            render_model_view(edited_inp, model_name=model_slug)
 
         # ── Export to Google Sheets ──
         st.divider()
