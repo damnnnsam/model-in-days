@@ -6,8 +6,8 @@
     "cash_in_bank": 0.0,
     "assets": 0.0,
     "liabilities": 0.0,
-    "customer_count": 0,
-    "total_addressable_market": 100000,
+    "customer_count": 4,
+    "total_addressable_market": 25000,
     "upfront_investment_costs": 0.0,
     "debt": 0.0,
     "interest_rate": 6.0,
@@ -47,7 +47,7 @@
     "cost_to_sell_renewal": 10.0,
     "cost_to_fulfill_renewal": 20.0,
     "time_to_collect_renewal": 50,
-    "renewal_rate_of_renewals": 80.0,
+    "renewal_rate_of_renewals": 75.0,
     "invites_per_customer": 0.0,
     "conversion_rate_per_invite": 5.0,
     "viral_time": 20,
@@ -69,5 +69,5 @@
   },
   "overrides": null,
   "created": "2026-04-08T20:37:13",
-  "modified": "2026-04-08T20:58:44"
+  "modified": "2026-04-08T21:39:26"
 }

@@ -249,6 +249,12 @@ elif view == "model":
     if mf is None:
         st.error(f"Model not found: {model_slug}")
     else:
+        try:
+            inp = resolve_model(client_slug, model_slug)
+        except (FileNotFoundError, ValueError) as e:
+            st.error(str(e))
+            st.stop()
+
         col_title, col_dup = st.columns([5, 1])
         with col_title:
             st.markdown(f"## {mf.name}")
@@ -266,12 +272,6 @@ elif view == "model":
             st.caption(mf.description)
         if mf.base:
             st.info(f"Layered on: **{mf.base}** — showing {len(mf.overrides or {})} overridden fields")
-
-        try:
-            inp = resolve_model(client_slug, model_slug)
-        except (FileNotFoundError, ValueError) as e:
-            st.error(str(e))
-            st.stop()
 
         # Editable inputs in sidebar
         st.sidebar.markdown("---")
