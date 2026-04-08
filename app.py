@@ -39,6 +39,7 @@ from views.model_viewer import render_model_view
 from views.deal_builder import render_deal_view
 from views.deal_comparison import render_deal_comparison
 from views.wizard import render_wizard
+from views.model_comparison import render_model_comparison
 
 
 # ── Helper: Model Inputs Editor ────────────────────────────────────────
@@ -542,3 +543,10 @@ elif view == "compare":
 elif view == "wizard":
     client_slug = nav["client"]
     render_wizard(client_slug)
+
+
+# ── Model Comparison ───────────────────────────────────────────────────
+
+elif view == "compare_models":
+    client_slug = nav["client"]
+    render_model_comparison(client_slug)

@@ -59,8 +59,9 @@ def render_sidebar_navigation() -> dict:
 
     # ── Check if new_model or new_deal is active ────────────────────
     active_view = st.session_state.get("active_view")
-    if active_view in ("new_model", "new_deal"):
-        st.sidebar.caption(f"{client_name} > {'New Model' if active_view == 'new_model' else 'New Deal'}")
+    if active_view in ("new_model", "new_deal", "compare_models"):
+        labels = {"new_model": "New Model", "new_deal": "New Deal", "compare_models": "Compare Models"}
+        st.sidebar.caption(f"{client_name} > {labels[active_view]}")
         if st.sidebar.button("← Back to overview", key="nav_view_back", use_container_width=True):
             st.session_state.pop("active_view", None)
             st.rerun()
@@ -214,8 +215,12 @@ def _render_full_nav(client_slug: str, client_name: str) -> dict:
         st.rerun()
 
     # Compare
-    if len(deals) >= 2:
+    if len(tree) > 0:  # at least 1 model (need 2, but selection happens in the view)
         st.sidebar.markdown("---")
+        if st.sidebar.button("Compare Models", key="nav_compare_models"):
+            st.session_state["active_view"] = "compare_models"
+            st.rerun()
+    if len(deals) >= 2:
         if st.sidebar.button("Compare Deals", key="nav_compare"):
             return {"view": "compare", "client": client_slug, "deals": [s for s, _ in deals]}
 
