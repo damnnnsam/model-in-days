@@ -302,6 +302,7 @@ elif view == "model":
 elif view == "new_model":
     client_slug = nav["client"]
     if st.button("← Back to overview"):
+        st.session_state.pop("active_view", None)
         st.rerun()
     st.markdown("## Create New Model")
 
@@ -318,18 +319,21 @@ elif view == "new_model":
 
         submitted = st.form_submit_button("Create Model")
 
-    if submitted and nm_name:
+    if submitted and not nm_name:
+        st.error("Please enter a model name.")
+    elif submitted and nm_name:
         import re
         slug = re.sub(r"[^a-z0-9]+", "-", nm_name.lower().strip()).strip("-")
         base_slug = model_slugs[base_idx]
 
         if base_slug is None:
-            # Base model with defaults
             create_base_model(client_slug, slug, nm_name, ModelInputs(), description=nm_description)
         else:
             # Layered model with no overrides yet
             create_layered_model(client_slug, slug, nm_name, base_slug, {}, description=nm_description)
 
+        st.session_state.pop("active_view", None)
+        st.session_state["active_model"] = slug
         st.success(f"Created model: {nm_name}")
         st.rerun()
 
@@ -464,6 +468,7 @@ elif view == "deal":
 elif view == "new_deal":
     client_slug = nav["client"]
     if st.button("← Back to overview"):
+        st.session_state.pop("active_view", None)
         st.rerun()
     st.markdown("## Create New Deal")
 
@@ -518,6 +523,8 @@ elif view == "new_deal":
             notes=nd_notes,
         )
         save_deal(client_slug, slug, deal_file)
+        st.session_state.pop("active_view", None)
+        st.session_state["active_deal"] = slug
         st.success(f"Created deal: {nd_name}")
         st.rerun()
 
