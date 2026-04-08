@@ -260,7 +260,29 @@ def render_client_overview(client_slug: str) -> None:
         st.error(f"Client not found: {client_slug}")
         return
 
-    st.markdown(f"# {meta.name}")
+    col_title, col_del = st.columns([6, 1])
+    with col_title:
+        st.markdown(f"# {meta.name}")
+    with col_del:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Delete Client", key=f"del_client_{client_slug}", type="secondary"):
+            st.session_state[f"confirm_del_{client_slug}"] = True
+
+    if st.session_state.get(f"confirm_del_{client_slug}"):
+        st.warning(f"Delete **{meta.name}** and all its models and deals? This cannot be undone.")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Yes, delete", key=f"confirm_yes_{client_slug}", type="primary"):
+                from store.client import delete_client
+                delete_client(client_slug)
+                st.session_state.pop(f"confirm_del_{client_slug}", None)
+                st.session_state.pop("nav_client", None)
+                st.rerun()
+        with c2:
+            if st.button("Cancel", key=f"confirm_no_{client_slug}"):
+                st.session_state.pop(f"confirm_del_{client_slug}", None)
+                st.rerun()
+
     if meta.industry:
         st.markdown(f"**Industry:** {meta.industry}")
     if meta.notes:
