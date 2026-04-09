@@ -95,10 +95,13 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
     leads_outbound_arr = np.zeros(T)
     leads_organic_arr = np.zeros(T)
 
-    # Fill daily leads (constant rate)
-    leads_inbound_arr[:] = leads_per_day_inbound if inp.use_inbound else 0
-    leads_outbound_arr[:] = leads_per_day_outbound if inp.use_outbound else 0
-    leads_organic_arr[:] = leads_per_day_organic if inp.use_organic else 0
+    # Fill daily leads (constant rate, respecting channel start days)
+    if inp.use_inbound:
+        leads_inbound_arr[inp.start_day_inbound:] = leads_per_day_inbound
+    if inp.use_outbound:
+        leads_outbound_arr[inp.start_day_outbound:] = leads_per_day_outbound
+    if inp.use_organic:
+        leads_organic_arr[inp.start_day_organic:] = leads_per_day_organic
 
     # New customers = leads (delayed) × lead→customer conversion
     for d in range(T):
@@ -352,12 +355,17 @@ def run_simulation(inp: ModelInputs) -> SimulationResult:
 
     new_cust_total = new_cust_inbound + new_cust_outbound + new_cust_organic + new_cust_viral
 
-    # ── Marketing costs ──
+    # ── Marketing costs (respecting channel start days) ──
     cost_marketing = np.zeros(T)
-    daily_media = inp.media_spend / 30.0 if inp.use_inbound else 0
-    daily_outbound = (inp.number_of_sdrs * inp.outbound_salary) / 30.0 if inp.use_outbound else 0
-    daily_organic = inp.organic_cost_per_month / 30.0 if inp.use_organic else 0
-    cost_marketing[:] = daily_media + daily_outbound + daily_organic
+    if inp.use_inbound:
+        daily_media = inp.media_spend / 30.0
+        cost_marketing[inp.start_day_inbound:] += daily_media
+    if inp.use_outbound:
+        daily_outbound = (inp.number_of_sdrs * inp.outbound_salary) / 30.0
+        cost_marketing[inp.start_day_outbound:] += daily_outbound
+    if inp.use_organic:
+        daily_organic = inp.organic_cost_per_month / 30.0
+        cost_marketing[inp.start_day_organic:] += daily_organic
 
     # Viral marketing cost
     if inp.use_viral:

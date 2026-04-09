@@ -338,6 +338,7 @@ def render_model_inputs(defaults: ModelInputs | None = None, prefix: str = "mi",
         st.subheader("Inbound")
         inp.use_inbound = st.checkbox("Enable Inbound", value=inp.use_inbound, key=f"{prefix}_use_in")
         if inp.use_inbound:
+            inp.start_day_inbound = int(st.number_input("Start Day", value=inp.start_day_inbound, step=30, key=f"{prefix}_sd_in", help="Day to activate this channel (0 = from start)"))
             inp.media_spend = st.number_input("Media Spend ($/month)", value=inp.media_spend, step=1000.0, key=f"{prefix}_ms")
             inp.cpm = st.number_input("CPM ($)", value=inp.cpm, step=1.0, key=f"{prefix}_cpm")
             inp.ctr = st.number_input("CTR (%)", value=inp.ctr, step=0.1, key=f"{prefix}_ctr")
@@ -349,6 +350,7 @@ def render_model_inputs(defaults: ModelInputs | None = None, prefix: str = "mi",
         st.subheader("Outbound")
         inp.use_outbound = st.checkbox("Enable Outbound", value=inp.use_outbound, key=f"{prefix}_use_ob")
         if inp.use_outbound:
+            inp.start_day_outbound = int(st.number_input("Start Day", value=inp.start_day_outbound, step=30, key=f"{prefix}_sd_ob", help="Day to activate this channel (0 = from start)"))
             inp.outbound_salary = st.number_input("SDR Salary ($/month)", value=inp.outbound_salary, step=500.0, key=f"{prefix}_sal")
             inp.contacts_per_month = int(st.number_input("Contacts per Month (per SDR)", value=inp.contacts_per_month, step=100, key=f"{prefix}_contacts"))
             inp.number_of_sdrs = int(st.number_input("Number of SDRs", value=inp.number_of_sdrs, step=1, key=f"{prefix}_sdrs"))
@@ -360,6 +362,7 @@ def render_model_inputs(defaults: ModelInputs | None = None, prefix: str = "mi",
         st.subheader("Organic")
         inp.use_organic = st.checkbox("Enable Organic", value=inp.use_organic, key=f"{prefix}_use_org")
         if inp.use_organic:
+            inp.start_day_organic = int(st.number_input("Start Day", value=inp.start_day_organic, step=30, key=f"{prefix}_sd_org", help="Day to activate this channel (0 = from start)"))
             inp.organic_views_per_month = int(st.number_input("Organic Views / Month", value=inp.organic_views_per_month, step=1000, key=f"{prefix}_org_views"))
             inp.organic_view_to_lead_rate = st.number_input("View→Lead (%)", value=inp.organic_view_to_lead_rate, step=0.1, key=f"{prefix}_org_conv")
             inp.lead_to_customer_rate_organic = st.number_input("Lead→Customer (%)", value=inp.lead_to_customer_rate_organic, step=1.0, key=f"{prefix}_lcr_org")

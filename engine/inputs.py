@@ -24,6 +24,11 @@ class ModelInputs:
     use_organic: bool = False
     use_viral: bool = False
 
+    # ── Channel Start Days ─────────────────────────────────────────
+    start_day_inbound: int = 0
+    start_day_outbound: int = 0
+    start_day_organic: int = 0
+
     # ── Inbound Marketing ───────────────────────────────────────────
     media_spend: float = 50_000.0  # $/month
     cpm: float = 55.0

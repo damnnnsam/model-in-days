@@ -1,0 +1,11 @@
+{
+  "name": "Target State",
+  "description": "Target state \u2014 projected improvements",
+  "base": "current-state",
+  "inputs": null,
+  "overrides": {
+    "funnel_conversion_rate": 3.5
+  },
+  "created": "2026-04-09T11:02:38",
+  "modified": "2026-04-09T11:02:38"
+}
