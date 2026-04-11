@@ -255,9 +255,13 @@ elif view == "model":
             st.error(str(e))
             st.stop()
 
-        col_title, col_dup = st.columns([5, 1])
+        col_title, col_rename, col_dup = st.columns([4, 1, 1])
         with col_title:
             st.markdown(f"## {mf.name}")
+        with col_rename:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Rename", key=f"rename_{model_slug}"):
+                st.session_state[f"renaming_{model_slug}"] = True
         with col_dup:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("Duplicate", key=f"dup_{model_slug}"):
@@ -268,6 +272,27 @@ elif view == "model":
                                  description=f"Copy of {mf.name}")
                 st.session_state["active_model"] = copy_slug
                 st.rerun()
+
+        # Rename inline form
+        if st.session_state.get(f"renaming_{model_slug}"):
+            with st.form(f"rename_form_{model_slug}"):
+                new_name = st.text_input("New name", value=mf.name)
+                new_desc = st.text_area("Description", value=mf.description or "")
+                rc1, rc2 = st.columns(2)
+                with rc1:
+                    rename_save = st.form_submit_button("Save", type="primary")
+                with rc2:
+                    rename_cancel = st.form_submit_button("Cancel")
+                if rename_save and new_name:
+                    mf.name = new_name
+                    mf.description = new_desc
+                    save_model(client_slug, model_slug, mf)
+                    st.session_state.pop(f"renaming_{model_slug}", None)
+                    st.rerun()
+                if rename_cancel:
+                    st.session_state.pop(f"renaming_{model_slug}", None)
+                    st.rerun()
+
         if mf.description:
             st.caption(mf.description)
         if mf.base:
