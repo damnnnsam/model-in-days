@@ -128,13 +128,13 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: Optional[int] 
     if operator_cost_daily is not None:
         op_cost = operator_cost_daily[:T_full]
         adj_fcf = sim.free_cash_flow[:T_full] - op_cost
-        adj_cumulative_fcf = np.cumsum(adj_fcf)
+        adj_cumulative_fcf = np.cumsum(adj_fcf) - inp.upfront_investment_costs
         adj_cash_balance = sim.cash_balance.copy()
         cum_op = np.cumsum(op_cost)
         adj_cash_balance[:T_full] -= cum_op
     else:
         adj_fcf = sim.free_cash_flow[:T_full]
-        adj_cumulative_fcf = sim.cumulative_fcf[:T_full]
+        adj_cumulative_fcf = sim.cumulative_fcf[:T_full] - inp.upfront_investment_costs
         adj_cash_balance = sim.cash_balance
 
     monthly_rev = float(np.sum(sim.revenue_total[start:end]))

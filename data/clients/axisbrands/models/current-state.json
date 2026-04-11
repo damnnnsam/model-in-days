@@ -8,7 +8,7 @@
     "liabilities": 0.0,
     "customer_count": 5,
     "total_addressable_market": 100000,
-    "upfront_investment_costs": 0.0,
+    "upfront_investment_costs": 120000.0,
     "debt": 0.0,
     "interest_rate": 6.0,
     "cost_to_sell": 2.0,
@@ -45,12 +45,12 @@
     "refund_period": 60,
     "refund_rate": 2.0,
     "contract_length": 30,
-    "churn_rate": 8.0,
+    "churn_rate": 12.0,
     "price_of_renewal": 10000.0,
     "cost_to_sell_renewal": 10.0,
     "cost_to_fulfill_renewal": 10.0,
     "time_to_collect_renewal": 30,
-    "renewal_rate_of_renewals": 95.0,
+    "renewal_rate_of_renewals": 93.0,
     "invites_per_customer": 0.0,
     "conversion_rate_per_invite": 5.0,
     "viral_time": 20,
@@ -72,5 +72,5 @@
   },
   "overrides": null,
   "created": "2026-04-11T16:32:07",
-  "modified": "2026-04-11T16:35:54"
+  "modified": "2026-04-11T17:00:57"
 }
