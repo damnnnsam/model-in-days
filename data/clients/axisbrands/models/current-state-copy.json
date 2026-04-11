@@ -1,6 +1,6 @@
 {
-  "name": "Current State (copy)",
-  "description": "Copy of Current State",
+  "name": "Future State",
+  "description": "Some critical things change",
   "base": null,
   "inputs": {
     "cash_in_bank": 0.0,
@@ -72,5 +72,5 @@
   },
   "overrides": null,
   "created": "2026-04-11T16:37:08",
-  "modified": "2026-04-11T16:37:08"
+  "modified": "2026-04-11T16:39:17"
 }

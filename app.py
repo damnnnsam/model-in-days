@@ -255,23 +255,24 @@ elif view == "model":
             st.error(str(e))
             st.stop()
 
-        col_title, col_rename, col_dup = st.columns([4, 1, 1])
+        col_title, col_actions = st.columns([5, 2])
         with col_title:
             st.markdown(f"## {mf.name}")
-        with col_rename:
+        with col_actions:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Rename", key=f"rename_{model_slug}"):
-                st.session_state[f"renaming_{model_slug}"] = True
-        with col_dup:
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Duplicate", key=f"dup_{model_slug}"):
-                import re as _re
-                copy_name = f"{mf.name} (copy)"
-                copy_slug = _re.sub(r"[^a-z0-9]+", "-", copy_name.lower().strip()).strip("-")
-                create_base_model(client_slug, copy_slug, copy_name, inp,
-                                 description=f"Copy of {mf.name}")
-                st.session_state["active_model"] = copy_slug
-                st.rerun()
+            bc1, bc2 = st.columns(2)
+            with bc1:
+                if st.button("Rename", key=f"rename_{model_slug}", use_container_width=True):
+                    st.session_state[f"renaming_{model_slug}"] = True
+            with bc2:
+                if st.button("Duplicate", key=f"dup_{model_slug}", use_container_width=True):
+                    import re as _re
+                    copy_name = f"{mf.name} (copy)"
+                    copy_slug = _re.sub(r"[^a-z0-9]+", "-", copy_name.lower().strip()).strip("-")
+                    create_base_model(client_slug, copy_slug, copy_name, inp,
+                                     description=f"Copy of {mf.name}")
+                    st.session_state["active_model"] = copy_slug
+                    st.rerun()
 
         # Rename inline form
         if st.session_state.get(f"renaming_{model_slug}"):
