@@ -207,6 +207,81 @@ if "url_loaded" not in st.session_state:
         elif _url_nav.get("view") == "deal":
             st.session_state["active_deal"] = _url_nav["deal"]
 
+# ── Public Mode (shared link, no client picker) ──────────────────────
+
+_public_m = st.query_params.get("m")
+_public_d = st.query_params.get("d")
+_has_client = st.query_params.get("client")
+
+if (_public_m or _public_d) and not _has_client:
+    # Public mode: render only the model/deal from the URL, no sidebar nav
+    from engine.url_state import decode_model, decode_deal, encode_model, encode_deal
+    from store.serialization import dict_to_model_inputs, dict_to_comp_structure
+
+    st.sidebar.title("Shared Model")
+    st.sidebar.caption("View-only public link. Edits update the URL but are not saved to any client.")
+    st.sidebar.markdown("---")
+
+    if _public_m:
+        try:
+            shared_inp = decode_model(_public_m)
+        except Exception as e:
+            st.error(f"Could not decode shared model: {e}")
+            st.stop()
+
+        st.info("Viewing a shared model. Tweaks update the URL but are not saved.")
+        st.markdown("## Shared Model")
+
+        # Render editable inputs in sidebar
+        from ui.sidebar import render_model_inputs
+        edited = render_model_inputs(defaults=shared_inp, prefix="public_m")
+
+        # Update URL with current state
+        new_encoded = encode_model(edited)
+        if new_encoded != _public_m:
+            st.query_params["m"] = new_encoded
+
+        render_model_view(edited, model_name="shared")
+        st.stop()
+
+    if _public_d:
+        try:
+            payload = decode_deal(_public_d)
+        except Exception as e:
+            st.error(f"Could not decode shared deal: {e}")
+            st.stop()
+
+        st.info("Viewing a shared deal. Tweaks update the URL but are not saved.")
+        st.markdown(f"## {payload.get('name', 'Shared Deal')}")
+
+        inp_before = dict_to_model_inputs(payload["before"])
+        inp_after = dict_to_model_inputs(payload["after"])
+        comp = dict_to_comp_structure(payload["comp"])
+        eng = payload.get("eng", {"duration_days": 365, "ramp_days": 60, "ramp_curve": "linear",
+                                  "post_engagement": "metrics_persist", "decay_rate_days": 180})
+
+        # Editable comp + engagement in sidebar
+        edited_comp = _render_comp_editor(comp, prefix="public_d")
+        edited_eng = _render_engagement_editor(eng, prefix="public_d")
+
+        # Update URL with current state
+        new_payload = {
+            "name": payload.get("name", "Shared Deal"),
+            "before": payload["before"],
+            "after": payload["after"],
+            "comp": comp_structure_to_dict(edited_comp),
+            "eng": edited_eng,
+        }
+        new_encoded = encode_deal(payload["before"], payload["after"],
+                                   comp_structure_to_dict(edited_comp), edited_eng,
+                                   name=payload.get("name", "Shared Deal"))
+        if new_encoded != _public_d:
+            st.query_params["d"] = new_encoded
+
+        render_deal_view(inp_before, inp_after, edited_comp, edited_eng)
+        st.stop()
+
+
 # ── Sidebar Navigation ────────────────────────────────────────────────
 
 nav = render_sidebar_navigation()
@@ -341,6 +416,20 @@ elif view == "model":
                 render_model_view(edited_inp, model_name=model_slug)
         else:
             render_model_view(edited_inp, model_name=model_slug)
+
+        # ── Share Public Link ──
+        st.divider()
+        st.markdown("### Share")
+        if st.button("Generate Public Link", key=f"share_pub_{model_slug}"):
+            from engine.url_state import encode_model
+            encoded = encode_model(edited_inp)
+            base_url = st.query_params.get("_base_url", "")
+            share_url = f"?m={encoded}"
+            st.session_state[f"share_url_{model_slug}"] = share_url
+
+        if st.session_state.get(f"share_url_{model_slug}"):
+            st.code(st.session_state[f"share_url_{model_slug}"], language=None)
+            st.caption("Append this to your app's base URL. Recipient gets a view-only model with no access to your clients.")
 
         # ── Export to Google Sheets ──
         st.divider()
@@ -485,6 +574,25 @@ elif view == "deal":
             st.rerun()
 
         render_deal_view(inp_before, inp_after, edited_comp, edited_eng)
+
+        # ── Share Public Link ──
+        st.divider()
+        st.markdown("### Share")
+        if st.button("Generate Public Link", key=f"share_pub_deal_{deal_slug}"):
+            from engine.url_state import encode_deal
+            from store.serialization import model_inputs_to_dict
+            encoded = encode_deal(
+                model_inputs_to_dict(inp_before),
+                model_inputs_to_dict(inp_after),
+                comp_structure_to_dict(edited_comp),
+                edited_eng,
+                name=deal_file.name,
+            )
+            st.session_state[f"share_url_deal_{deal_slug}"] = f"?d={encoded}"
+
+        if st.session_state.get(f"share_url_deal_{deal_slug}"):
+            st.code(st.session_state[f"share_url_deal_{deal_slug}"], language=None)
+            st.caption("Append this to your app's base URL. Recipient gets a view-only deal — they can tweak compensation but it doesn't save anywhere.")
 
         # ── Export Deal to Google Sheets ──
         st.divider()
