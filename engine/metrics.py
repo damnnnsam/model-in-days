@@ -160,7 +160,8 @@ def compute_kpis(inp: ModelInputs, sim: SimulationResult, at_day: Optional[int] 
     # ── Cash consumption (simulation-wide) ────────────────────────
     min_cash = float(np.min(adj_cash_balance[:T_full]))
     cash_consumption = abs(min(min_cash, 0))
-    cash_needed = max(-min_cash, 0)
+    # Cash needed must be at least the upfront investment + any operating deficit
+    cash_needed = max(-min_cash, inp.upfront_investment_costs, 0)
 
     # ── Profit per customer per month ───────────────────────────────
     active_end = float(sim.active_customers[end - 1])
